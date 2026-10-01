@@ -1,0 +1,174 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-09-30 12:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "serial_no",
+  "item_code",
+  "role",
+  "role_code",
+  "piece_no",
+  "cb1",
+  "status",
+  "rfid_tag",
+  "sales_invoice",
+  "alteration_section",
+  "custodian",
+  "outward_on",
+  "expected_return"
+ ],
+ "fields": [
+  {
+   "fieldname": "serial_no",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Parent Serial No (Sellable Unit)",
+   "options": "Serial No",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Set Item",
+   "options": "Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "role",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Role",
+   "read_only": 1
+  },
+  {
+   "fieldname": "role_code",
+   "fieldtype": "Data",
+   "label": "Role Code",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "piece_no",
+   "fieldtype": "Int",
+   "label": "Piece No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Pending Tag",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Pending Tag\nTagged\nSold\nReturned - Hold\nOut for Alteration\nMissing\nDamaged",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rfid_tag",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Current RFID Tag",
+   "options": "RFID Tag",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_invoice",
+   "fieldtype": "Link",
+   "label": "Sold On",
+   "options": "Sales Invoice",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "alteration_section",
+   "fieldtype": "Section Break",
+   "label": "Alteration / Custody"
+  },
+  {
+   "fieldname": "custodian",
+   "fieldtype": "Data",
+   "label": "Custodian"
+  },
+  {
+   "fieldname": "outward_on",
+   "fieldtype": "Datetime",
+   "label": "Outward On"
+  },
+  {
+   "fieldname": "expected_return",
+   "fieldtype": "Datetime",
+   "label": "Expected Return"
+  }
+ ],
+ "in_create": 1,
+ "links": [],
+ "modified": "2026-09-30 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RFID Retail",
+ "name": "Garment Component",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Store Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Owner"
+  },
+  {
+   "export": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Stock Operator"
+  },
+  {
+   "export": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Cashier"
+  }
+ ],
+ "search_fields": "serial_no,role,rfid_tag",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "role"
+}

@@ -1,0 +1,132 @@
+{
+ "actions": [],
+ "creation": "2026-10-01 12:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "sale_section",
+  "require_scan_for_sale",
+  "allow_label_fallback",
+  "block_untracked_items",
+  "device_section",
+  "device_offline_minutes",
+  "exit_gate_enabled",
+  "cb1",
+  "daily_audit_required",
+  "access_section",
+  "station_roles"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "description": "Master switch. When off the app changes nothing: no invoice checks, no stations, no scheduled alerts.",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enable RFID"
+  },
+  {
+   "fieldname": "sale_section",
+   "fieldtype": "Section Break",
+   "label": "Sale rules"
+  },
+  {
+   "default": "1",
+   "description": "Off: only grouped sets need a counter read; single tagged garments may be billed by picking the serial.",
+   "fieldname": "require_scan_for_sale",
+   "fieldtype": "Check",
+   "label": "Every RFID-tracked unit must be read at an RFID counter before billing"
+  },
+  {
+   "default": "1",
+   "description": "Piece/serial labels count as a read and are logged as Barcode Fallback exceptions.",
+   "fieldname": "allow_label_fallback",
+   "fieldtype": "Check",
+   "label": "Accept printed labels when a tag cannot be read"
+  },
+  {
+   "default": "0",
+   "description": "On: nothing can be sold unless it carries an RFID identity.",
+   "fieldname": "block_untracked_items",
+   "fieldtype": "Check",
+   "label": "Block stock items that are not RFID tracked"
+  },
+  {
+   "fieldname": "device_section",
+   "fieldtype": "Section Break",
+   "label": "Devices and daily checks"
+  },
+  {
+   "default": "15",
+   "fieldname": "device_offline_minutes",
+   "fieldtype": "Int",
+   "label": "Mark a device offline after (minutes)"
+  },
+  {
+   "default": "1",
+   "fieldname": "exit_gate_enabled",
+   "fieldtype": "Check",
+   "label": "Exit gate in use"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Raises a Missed Audit exception at 23:00 when no count was compared that day.",
+   "fieldname": "daily_audit_required",
+   "fieldtype": "Check",
+   "label": "Daily handheld count required"
+  },
+  {
+   "description": "Who may use each station. System Manager always can. A station with no rows is closed to everyone else.",
+   "fieldname": "access_section",
+   "fieldtype": "Section Break",
+   "label": "Station access"
+  },
+  {
+   "fieldname": "station_roles",
+   "fieldtype": "Table",
+   "label": "Station Roles",
+   "options": "RFID Station Role"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-01 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RFID Retail",
+ "name": "RFID Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "RFID Store Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "RFID Owner"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -1,0 +1,309 @@
+{
+ "charts": [],
+ "content": "[{\"id\": \"rfr0001\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>RFID Retail</b></span>\", \"col\": 12}}, {\"id\": \"rfr0002\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Open RFID Exceptions\", \"col\": 4}}, {\"id\": \"rfr0003\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Critical Open Alerts\", \"col\": 4}}, {\"id\": \"rfr0004\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Units Waiting for Tags\", \"col\": 4}}, {\"id\": \"rfr0005\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Units Ready for Sale\", \"col\": 4}}, {\"id\": \"rfr0006\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Tags Pending Detach\", \"col\": 4}}, {\"id\": \"rfr0007\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"Devices Offline\", \"col\": 4}}, {\"id\": \"rfr0008\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rfr0009\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Stations &amp; daily checks</b></span>\", \"col\": 12}}, {\"id\": \"rfr0010\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"RFID Stations\", \"col\": 3}}, {\"id\": \"rfr0012\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"RFID Daily Closing\", \"col\": 3}}, {\"id\": \"rfr0013\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"RFID Exception\", \"col\": 3}}, {\"id\": \"rfr0014\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"RFID Audit Session\", \"col\": 3}}, {\"id\": \"rfr0015\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Sales Invoice\", \"col\": 3}}, {\"id\": \"rfr0099\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"RFID Settings\", \"col\": 3}}, {\"id\": \"rfr0016\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"rfr0017\", \"type\": \"card\", \"data\": {\"card_name\": \"RFID\", \"col\": 4}}, {\"id\": \"rfr0018\", \"type\": \"card\", \"data\": {\"card_name\": \"Garments\", \"col\": 4}}, {\"id\": \"rfr0019\", \"type\": \"card\", \"data\": {\"card_name\": \"Reports\", \"col\": 4}}]",
+ "creation": "2026-09-30 12:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "retail",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "RFID Retail",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "RFID",
+   "link_count": 6,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "RFID Tag",
+   "link_count": 0,
+   "link_to": "RFID Tag",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "RFID Tag Assignment",
+   "link_count": 0,
+   "link_to": "RFID Tag Assignment",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "RFID Device",
+   "link_count": 0,
+   "link_to": "RFID Device",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "RFID Basket",
+   "link_count": 0,
+   "link_to": "RFID Basket",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "RFID Exception",
+   "link_count": 0,
+   "link_to": "RFID Exception",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "RFID Audit Session",
+   "link_count": 0,
+   "link_to": "RFID Audit Session",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Garments",
+   "link_count": 6,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item",
+   "link_count": 0,
+   "link_to": "Item",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Garment Set Definition",
+   "link_count": 0,
+   "link_to": "Garment Set Definition",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Garment Component",
+   "link_count": 0,
+   "link_to": "Garment Component",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Serial No",
+   "link_count": 0,
+   "link_to": "Serial No",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Purchase Receipt",
+   "link_count": 0,
+   "link_to": "Purchase Receipt",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Loyalty Program",
+   "link_count": 0,
+   "link_to": "Loyalty Program",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 4,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "RFID Daily Closing",
+   "link_count": 0,
+   "link_to": "RFID Daily Closing",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Sales Invoice",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Balance",
+   "link_count": 0,
+   "link_to": "Stock Balance",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Stock Ledger Entry",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Sales Register",
+   "link_count": 0,
+   "link_to": "Sales Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Sales Invoice",
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Ledger",
+   "link_count": 0,
+   "link_to": "Stock Ledger",
+   "link_type": "Report",
+   "onboard": 0,
+   "report_ref_doctype": "Stock Ledger Entry",
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-09-30 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RFID Retail",
+ "name": "RFID Retail",
+ "number_cards": [
+  {
+   "label": "Open RFID Exceptions",
+   "number_card_name": "Open RFID Exceptions"
+  },
+  {
+   "label": "Critical Open Alerts",
+   "number_card_name": "Critical Open Alerts"
+  },
+  {
+   "label": "Units Waiting for Tags",
+   "number_card_name": "Units Waiting for Tags"
+  },
+  {
+   "label": "Units Ready for Sale",
+   "number_card_name": "Units Ready for Sale"
+  },
+  {
+   "label": "Tags Pending Detach",
+   "number_card_name": "Tags Pending Detach"
+  },
+  {
+   "label": "Devices Offline",
+   "number_card_name": "Devices Offline"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "RFID Owner"
+  },
+  {
+   "role": "RFID Store Manager"
+  }
+ ],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "color": "Red",
+   "label": "RFID Stations",
+   "type": "URL",
+   "url": "/rfid"
+  },
+  {
+   "color": "Green",
+   "label": "RFID Daily Closing",
+   "link_to": "RFID Daily Closing",
+   "report_ref_doctype": "Sales Invoice",
+   "type": "Report"
+  },
+  {
+   "color": "Red",
+   "doc_view": "List",
+   "label": "RFID Exception",
+   "link_to": "RFID Exception",
+   "stats_filter": "{\"status\":[\"!=\",\"Resolved\"]}",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "List",
+   "label": "RFID Audit Session",
+   "link_to": "RFID Audit Session",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "List",
+   "label": "Sales Invoice",
+   "link_to": "Sales Invoice",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "RFID Settings",
+   "link_to": "RFID Settings",
+   "type": "DocType"
+  }
+ ],
+ "title": "RFID Retail",
+ "type": "Workspace"
+}

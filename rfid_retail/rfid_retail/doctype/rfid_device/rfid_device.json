@@ -1,0 +1,160 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:device_id",
+ "creation": "2026-09-30 12:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "device_id",
+  "device_type",
+  "model",
+  "is_active",
+  "cb1",
+  "pos_profile",
+  "warehouse",
+  "stale_after_minutes",
+  "health_section",
+  "last_seen",
+  "last_status",
+  "health"
+ ],
+ "fields": [
+  {
+   "fieldname": "device_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Device ID",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "device_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Device Type",
+   "options": "Desktop Reader\nTray Reader\nHandheld\nExit Gate",
+   "reqd": 1
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "label": "POS Profile (Counter)",
+   "options": "POS Profile"
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "label": "Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "default": "15",
+   "fieldname": "stale_after_minutes",
+   "fieldtype": "Int",
+   "label": "Offline After (minutes)"
+  },
+  {
+   "fieldname": "health_section",
+   "fieldtype": "Section Break",
+   "label": "Health"
+  },
+  {
+   "fieldname": "last_seen",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Last Heartbeat",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_status",
+   "fieldtype": "Data",
+   "label": "Last Reported Status",
+   "read_only": 1
+  },
+  {
+   "default": "Unknown",
+   "fieldname": "health",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Health",
+   "options": "Unknown\nOnline\nOffline",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-30 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RFID Retail",
+ "name": "RFID Device",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Store Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Owner"
+  },
+  {
+   "export": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Stock Operator"
+  },
+  {
+   "export": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Cashier"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

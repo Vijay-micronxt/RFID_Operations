@@ -1,0 +1,279 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "AUD-.YYYY.-.#####",
+ "creation": "2026-09-30 12:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "audit_date",
+  "warehouse",
+  "scope",
+  "areas",
+  "cb1",
+  "status",
+  "operator",
+  "device",
+  "cutoff",
+  "last_upload",
+  "summary_section",
+  "expected_units",
+  "verified_units",
+  "incomplete_sets",
+  "cb2",
+  "unverified_count",
+  "unexpected_count",
+  "sold_observed_count",
+  "cb3",
+  "movements_after_cutoff",
+  "reviewed_by",
+  "reviewed_on",
+  "results_section",
+  "results",
+  "raw_section",
+  "uploads",
+  "observations",
+  "expected"
+ ],
+ "fields": [
+  {
+   "default": "Today",
+   "fieldname": "audit_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Audit Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Warehouse",
+   "options": "Warehouse",
+   "reqd": 1
+  },
+  {
+   "default": "Full Store",
+   "fieldname": "scope",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Coverage",
+   "options": "Full Store\nPartial Area"
+  },
+  {
+   "default": "Sales Floor\nStockroom\nTrial Rooms\nReturns/Hold\nAlteration",
+   "fieldname": "areas",
+   "fieldtype": "Small Text",
+   "label": "Required Areas"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Planned",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Planned\nIn Progress\nComparison Ready\nInvestigation Pending\nSubmitted for Review\nReviewed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "operator",
+   "fieldtype": "Link",
+   "label": "Operator",
+   "options": "User"
+  },
+  {
+   "fieldname": "device",
+   "fieldtype": "Link",
+   "label": "Handheld",
+   "options": "RFID Device"
+  },
+  {
+   "description": "Expected position is frozen at this time. Later movements are listed separately.",
+   "fieldname": "cutoff",
+   "fieldtype": "Datetime",
+   "label": "Expected Stock Cut-off",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_upload",
+   "fieldtype": "Datetime",
+   "label": "Last Upload",
+   "read_only": 1
+  },
+  {
+   "fieldname": "summary_section",
+   "fieldtype": "Section Break",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "expected_units",
+   "fieldtype": "Int",
+   "label": "Expected Sellable Units",
+   "read_only": 1
+  },
+  {
+   "fieldname": "verified_units",
+   "fieldtype": "Int",
+   "label": "Complete Verified Units",
+   "read_only": 1
+  },
+  {
+   "fieldname": "incomplete_sets",
+   "fieldtype": "Int",
+   "label": "Incomplete Sets",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "unverified_count",
+   "fieldtype": "Int",
+   "label": "Unverified Identities",
+   "read_only": 1
+  },
+  {
+   "fieldname": "unexpected_count",
+   "fieldtype": "Int",
+   "label": "Unexpected / Unmapped Tags",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sold_observed_count",
+   "fieldtype": "Int",
+   "label": "Sold but Observed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "movements_after_cutoff",
+   "fieldtype": "Int",
+   "label": "Stock Movements After Cut-off",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Reviewed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "results_section",
+   "fieldtype": "Section Break",
+   "label": "Results"
+  },
+  {
+   "fieldname": "results",
+   "fieldtype": "Table",
+   "label": "Results",
+   "options": "RFID Audit Result"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "raw_section",
+   "fieldtype": "Section Break",
+   "label": "Raw Evidence"
+  },
+  {
+   "fieldname": "uploads",
+   "fieldtype": "Table",
+   "label": "Uploads",
+   "options": "RFID Audit Upload",
+   "read_only": 1
+  },
+  {
+   "fieldname": "observations",
+   "fieldtype": "Table",
+   "label": "Unique Observations",
+   "options": "RFID Audit Observation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expected",
+   "fieldtype": "Table",
+   "label": "Expected Snapshot",
+   "options": "RFID Audit Expected",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-30 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RFID Retail",
+ "name": "RFID Audit Session",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Store Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Stock Operator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Owner",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

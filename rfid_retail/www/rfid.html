@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>RFID Stations</title>
+	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=1">
+</head>
+<body>
+<header class="topbar">
+	<div class="brand">{{ company }} <span>RFID</span></div>
+	{% set labels = {"counter": "Billing Counter", "mapping": "Tag Mapping", "detach": "Detach", "gate": "Exit Gate", "audit": "Stock Audit"} %}
+	<nav id="tabs">
+		{% for t in tabs %}<button data-tab="{{ t }}" class="{{ 'active' if loop.first else '' }}">{{ labels[t] }}</button>{% endfor %}
+	</nav>
+	<div class="who">{{ user_fullname }} · <a href="/app">Desk</a></div>
+</header>
+
+<main>
+{% if not enabled %}<div class="panel narrow"><h3>RFID is switched off</h3><p class="muted">Turn it on in <a href="/app/rfid-settings">RFID Settings</a>.</p></div>{% endif %}
+<!-- ============================================================ COUNTER -->
+<section id="tab-counter" class="tab">
+	<div class="grid">
+		<div class="panel">
+			<div class="row">
+				<label>Counter <select id="c-counter"></select></label>
+				<button id="c-open" class="btn">Start basket</button>
+				<span id="c-basket" class="muted"></span>
+			</div>
+			<div class="reader">
+				<label>Tray reads / scanned labels <small>(reader bridge types EPCs here; paste many, one per line)</small></label>
+				<textarea id="c-reads" rows="3" placeholder="E28011700000020A1B2C3D01"></textarea>
+				<div class="row">
+					<button id="c-read" class="btn primary">Read tray</button>
+					<label class="muted"><input type="checkbox" id="c-label"> These are printed labels (barcode fallback)</label>
+				</div>
+			</div>
+			<div id="c-events"></div>
+			<table class="lines">
+				<thead><tr><th>Item</th><th>Unit</th><th>Pieces</th><th class="num">Rate</th><th></th></tr></thead>
+				<tbody id="c-lines"><tr><td colspan="5" class="muted">Start a basket and place garments on the tray.</td></tr></tbody>
+			</table>
+		</div>
+		<div class="panel side">
+			<h3>Customer</h3>
+			<div class="row"><input id="c-mobile" placeholder="Mobile number"><button id="c-find" class="btn">Find</button></div>
+			<div id="c-cust" class="muted">Walk-in customer</div>
+			<div id="c-newcust" class="hidden row"><input id="c-custname" placeholder="Name"><button id="c-create" class="btn">Add customer</button></div>
+			<div id="c-loyalty" class="hidden row"><label>Redeem points <input id="c-redeem" type="number" min="0" value="0"></label></div>
+			<h3>Bill</h3>
+			<dl class="totals" id="c-totals"></dl>
+			<h3>Payment</h3>
+			<div id="c-payments"></div>
+			<button id="c-checkout" class="btn primary big" disabled>Complete sale</button>
+			<button id="c-cancel" class="btn ghost">Cancel basket</button>
+			<div id="c-result"></div>
+		</div>
+	</div>
+</section>
+
+<!-- ============================================================ MAPPING -->
+<section id="tab-mapping" class="tab">
+	<div class="grid">
+		<div class="panel">
+			<div class="row">
+				<input id="m-unit" placeholder="Serial no / piece label / tag">
+				<button id="m-load" class="btn primary">Open unit</button>
+				<button id="m-pending" class="btn">Units waiting for tags</button>
+			</div>
+			<div id="m-detail"></div>
+		</div>
+		<div class="panel side">
+			<h3>Map a tag</h3>
+			<p class="muted">Pick a piece on the left, then read ONE tag on the desktop reader.</p>
+			<label>Piece <input id="m-component" readonly placeholder="(standalone garment)"></label>
+			<label>Tag read <input id="m-epc" placeholder="EPC from desktop reader"></label>
+			<label>Reader <select id="m-device" class="device-select" data-type="Desktop Reader"></select></label>
+			<button id="m-map" class="btn primary">Bind tag</button>
+			<h3>Replace damaged tag</h3>
+			<label>Old tag <input id="m-old"></label>
+			<label>New tag <input id="m-new"></label>
+			<label>Reason <input id="m-reason" value="Tag Damaged"></label>
+			<button id="m-replace" class="btn">Replace</button>
+			<div id="m-msg"></div>
+		</div>
+	</div>
+</section>
+
+<!-- ============================================================ DETACH -->
+<section id="tab-detach" class="tab">
+	<div class="panel narrow">
+		<p class="muted">Only tags of COMPLETED sales are released back to the reusable pool.</p>
+		<textarea id="d-reads" rows="4" placeholder="Tag reads"></textarea>
+		<button id="d-go" class="btn primary">Release tags</button>
+		<div id="d-out"></div>
+	</div>
+</section>
+
+<!-- ============================================================ GATE -->
+<section id="tab-gate" class="tab">
+	<div class="panel narrow">
+		<label>Gate <select id="g-device" class="device-select" data-type="Exit Gate"></select></label>
+		<textarea id="g-reads" rows="4" placeholder="Reads at the exit portal"></textarea>
+		<button id="g-go" class="btn primary">Evaluate</button>
+		<div id="g-light" class="light">—</div>
+		<div id="g-out"></div>
+	</div>
+</section>
+
+<!-- ============================================================ AUDIT -->
+<section id="tab-audit" class="tab">
+	<div class="grid">
+		<div class="panel">
+			<div class="row">
+				<label>Warehouse <select id="a-wh">{% for w in warehouses %}<option>{{ w }}</option>{% endfor %}</select></label>
+				<label>Handheld <select id="a-device" class="device-select" data-type="Handheld"></select></label>
+				<button id="a-start" class="btn primary">Start today's count</button>
+			</div>
+			<div class="row"><input id="a-session" placeholder="or open session AUD-..."><button id="a-open" class="btn">Open</button></div>
+			<label>Area <select id="a-area"><option>Sales Floor</option><option>Stockroom</option><option>Trial Rooms</option><option>Returns/Hold</option><option>Alteration</option></select></label>
+			<textarea id="a-reads" rows="5" placeholder="Handheld reads for this area"></textarea>
+			<div class="row">
+				<button id="a-upload" class="btn">Upload batch</button>
+				<button id="a-compare" class="btn primary">Compare</button>
+				<button id="a-submit" class="btn">Submit for review</button>
+			</div>
+		</div>
+		<div class="panel side">
+			<h3>Session</h3>
+			<div id="a-summary" class="muted">No session open</div>
+		</div>
+	</div>
+</section>
+</main>
+<div id="toast"></div>
+<script>
+	window.RFID = {
+		csrf: "{{ csrf_token }}",
+		devices: {{ devices | tojson }},
+		stations: {{ stations | tojson }},
+		tabs: {{ tabs | tojson }}
+	};
+</script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=1"></script>
+</body>
+</html>

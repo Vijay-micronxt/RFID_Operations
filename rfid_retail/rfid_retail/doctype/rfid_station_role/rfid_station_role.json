@@ -1,0 +1,44 @@
+{
+ "actions": [],
+ "creation": "2026-10-01 12:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "station",
+  "role"
+ ],
+ "fields": [
+  {
+   "columns": 4,
+   "fieldname": "station",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Station",
+   "options": "Billing\nTag Mapping\nTag Repair\nDetach\nExit Gate\nDevice API\nStock Audit\nAudit Review\nManager Override",
+   "reqd": 1
+  },
+  {
+   "columns": 4,
+   "fieldname": "role",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Role",
+   "options": "Role",
+   "reqd": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-01 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RFID Retail",
+ "name": "RFID Station Role",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
