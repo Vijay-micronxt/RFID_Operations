@@ -1,322 +1,368 @@
-/* RFID stations: thin client over rfid_retail.api.*. Every rule lives server-side. */
+/* RFID stations: a thin, mobile-first client over rfid_retail.api.*. Every rule lives on the server. */
 (() => {
 	const $ = (id) => document.getElementById(id);
 	const esc = (v) =>
 		String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-	const money = (v) => Number(v || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" });
-	const lines = (text) => text.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+	const codesOf = (text) => text.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+	const icon = (name, cls = "") => `<span class="ms ${cls}">${name}</span>`;
 
 	async function call(method, args = {}, post = true) {
 		const url = `/api/method/rfid_retail.api.${method}`;
-		const opts = { headers: { Accept: "application/json", "X-Frappe-CSRF-Token": RFID.csrf } };
-		let res;
-		if (post) {
-			opts.method = "POST";
-			opts.headers["Content-Type"] = "application/json";
-			opts.body = JSON.stringify(args);
-			res = await fetch(url, opts);
-		} else {
-			res = await fetch(`${url}?${new URLSearchParams(args)}`, opts);
-		}
+		const headers = { Accept: "application/json", "X-Frappe-CSRF-Token": RFID.csrf };
+		const res = post
+			? await fetch(url, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(args) })
+			: await fetch(`${url}?${new URLSearchParams(args)}`, { headers });
 		const data = await res.json().catch(() => ({}));
 		if (!res.ok) {
 			let msg = data.exception || res.statusText;
 			try {
 				msg = JSON.parse(JSON.parse(data._server_messages)[0]).message;
 			} catch (e) {}
-			toast(msg.replace(/<[^>]+>/g, ""), true);
+			msg = String(msg).replace(/<[^>]+>/g, "").replace(/^[\w.]+Error: /, "");
+			snack(msg, true);
 			throw new Error(msg);
 		}
 		return data.message;
 	}
 
-	function toast(msg, bad) {
-		const t = $("toast");
-		t.textContent = msg;
-		t.className = bad ? "show bad" : "show";
-		clearTimeout(t._h);
-		t._h = setTimeout(() => (t.className = ""), 4500);
+	function snack(msg, bad = false) {
+		const s = $("snackbar");
+		s.textContent = msg;
+		s.className = `show${bad ? " bad" : ""}`;
+		clearTimeout(s._t);
+		s._t = setTimeout(() => (s.className = ""), 3500);
+		if (bad && navigator.vibrate) navigator.vibrate(200);
 	}
 
-	// ------------------------------------------------------------ tabs + devices
-	document.querySelectorAll("#tabs button").forEach((b) =>
-		b.addEventListener("click", () => {
-			document.querySelectorAll("#tabs button, .tab").forEach((x) => x.classList.remove("active"));
-			b.classList.add("active");
-			$(`tab-${b.dataset.tab}`).classList.add("active");
-		})
-	);
+	/** Enter (or a reader's trailing newline) submits; pasting many codes submits at once. */
+	function onScan(input, handler) {
+		const fire = async () => {
+			const codes = codesOf(input.value);
+			input.value = "";
+			if (!codes.length) return;
+			input.disabled = true;
+			try {
+				await handler(codes);
+			} catch (e) {
+				/* already shown */
+			} finally {
+				input.disabled = false;
+				input.focus();
+			}
+		};
+		input.addEventListener("keydown", (e) => {
+			if (e.key === "Enter") {
+				e.preventDefault();
+				fire();
+			}
+		});
+		input.addEventListener("paste", () => setTimeout(() => codesOf(input.value).length > 1 && fire(), 0));
+	}
+
+	function sheet(title, items) {
+		const back = document.createElement("div");
+		back.className = "sheet-back";
+		back.innerHTML = `<div class="sheet"><h3>${esc(title)}</h3>${items
+			.map((it, i) => `<button class="menu-item" data-i="${i}">${icon(it.icon)}<span>${esc(it.label)}</span></button>`)
+			.join("")}</div>`;
+		back.addEventListener("click", (e) => {
+			const btn = e.target.closest("[data-i]");
+			back.remove();
+			if (btn) items[btn.dataset.i].run();
+		});
+		document.body.appendChild(back);
+	}
+
+	// ------------------------------------------------------------ navigation (hash, so Android back works)
+	const screens = [...document.querySelectorAll(".screen")];
+	if (!screens.length) return; // RFID switched off: the page only shows a notice
+	const onOpen = {};
+	function show() {
+		const name = location.hash.slice(1) || "home";
+		const target = screens.find((s) => s.dataset.screen === name) || screens[0];
+		if (!target) return;
+		screens.forEach((s) => s.classList.toggle("active", s === target));
+		const home = target.dataset.screen === "home";
+		$("back").hidden = home;
+		$("title").textContent = home ? "RFID Stations" : target.dataset.title;
+		onOpen[target.dataset.screen]?.();
+		target.querySelector(".scanbar input")?.focus();
+	}
+	window.addEventListener("hashchange", show);
+	$("back").addEventListener("click", () => history.back());
+	document.querySelectorAll("[data-go]").forEach((t) => t.addEventListener("click", () => (location.hash = t.dataset.go)));
+
 	document.querySelectorAll(".device-select").forEach((sel) => {
 		const opts = RFID.devices.filter((d) => d.device_type === sel.dataset.type);
-		sel.innerHTML = '<option value="">(none)</option>' + opts.map((d) => `<option>${esc(d.name)}</option>`).join("");
+		sel.innerHTML = '<option value="">None</option>' + opts.map((d) => `<option>${esc(d.name)}</option>`).join("");
 		if (opts.length) sel.value = opts[0].name;
 	});
 
-	// ------------------------------------------------------------ counter
-	const C = { counters: [], basket: null, view: null, customer: null };
+	// ------------------------------------------------------------ tag garments
+	const M = { unit: null, armed: null };
 
-	async function loadCounters() {
-		C.counters = await call("pos.get_counters", {}, false);
-		$("c-counter").innerHTML = C.counters.map((c) => `<option>${esc(c.name)}</option>`).join("");
-		renderPayments();
+	function pieces(u) {
+		if (u.components) return u.components;
+		return [{ name: null, role: u.item_name, status: u.tag ? "Tagged" : "Pending Tag", rfid_tag: u.tag }];
 	}
-	const counter = () => C.counters.find((c) => c.name === $("c-counter").value);
 
-	function renderPayments() {
-		const c = counter();
-		$("c-payments").innerHTML = (c?.payments || [])
+	function armNext() {
+		const next = pieces(M.unit).find((p) => !p.rfid_tag && p.status !== "Out for Alteration");
+		M.armed = next ? next.name || "__single__" : null;
+	}
+
+	function renderUnit() {
+		const u = M.unit;
+		const box = $("m-unit");
+		if (!u) {
+			box.innerHTML = "";
+			return;
+		}
+		const ready = u.custom_rfid_status === "Ready";
+		const statusPill = ready ? "ok" : u.custom_rfid_status === "Sold" ? "" : "warn";
+		const rows = pieces(u)
+			.map((p) => {
+				const key = p.name || "__single__";
+				const armed = M.armed === key;
+				const away = p.status === "Out for Alteration";
+				const lead = p.rfid_tag ? `<span class="lead ok">${icon("check")}</span>` : away ? `<span class="lead warn">${icon("content_cut")}</span>` : `<span class="lead">${icon("sell")}</span>`;
+				const sub = p.rfid_tag ? esc(p.rfid_tag) : away ? "At alteration" : armed ? "Scan the tag now" : "Needs a tag";
+				return `<div class="row ${armed ? "active" : ""} ${p.rfid_tag ? "done" : ""}" data-piece="${esc(key)}">
+					${lead}<div class="grow"><b>${esc(p.role)}</b><small>${sub}</small></div>
+					<button class="icon-btn" data-more="${esc(key)}" aria-label="More">${icon("more_vert")}</button></div>`;
+			})
+			.join("");
+		box.innerHTML = `<div class="card">
+			<div class="unit-head"><span class="lead ${ready ? "ok" : ""}">${icon(u.components ? "checkroom" : "apparel")}</span>
+				<div class="grow"><b>${esc(u.item_name)}</b><small>${esc(u.name)} · ${esc(u.warehouse || "")}</small></div>
+				<span class="pill ${statusPill}">${esc(u.custom_rfid_status || "")}</span></div>
+			<div class="list">${rows}</div>
+			${u.custom_rfid_status === "Returned - Hold" ? `<button class="btn tonal wide" id="m-release" style="margin-top:12px">${icon("assignment_turned_in")}Return checked - tag again</button>` : ""}
+		</div>`;
+		const bar = $("m-scan").parentElement;
+		const armedPiece = pieces(u).find((p) => (p.name || "__single__") === M.armed);
+		bar.classList.toggle("armed", !!armedPiece);
+		$("m-scan").placeholder = armedPiece ? `Scan the tag for ${armedPiece.role}` : "Scan the next garment label";
+		$("m-hint").textContent = armedPiece
+			? "Hold the tag on the reader. The next piece is picked automatically."
+			: ready
+				? "All pieces tagged. This garment is ready to sell."
+				: "Tap a piece to choose it, or scan another garment.";
+	}
+
+	async function openUnit(code) {
+		M.unit = await call("mapping.unit_detail", { serial_no: code }, false);
+		armNext();
+		renderUnit();
+	}
+
+	async function loadPending() {
+		const rows = await call("mapping.pending_units", {}, false).catch(() => []);
+		$("m-count").textContent = rows.length;
+		$("m-pending").innerHTML =
+			rows
+				.map(
+					(r) => `<button class="row" data-open="${esc(r.name)}">
+						<span class="lead">${icon(r.custom_is_garment_set ? "checkroom" : "apparel")}</span>
+						<div class="grow"><b>${esc(r.item_name)}</b><small>${esc(r.name)}</small></div>
+						<span class="pill ${r.custom_rfid_status === "Returned - Hold" ? "bad" : "warn"}">${esc(r.custom_rfid_status)}</span></button>`
+				)
+				.join("") || `<div class="hint">Nothing waiting. New stock appears here after a purchase receipt.</div>`;
+	}
+	onOpen.mapping = loadPending;
+
+	onScan($("m-scan"), async (codes) => {
+		const code = codes[0];
+		if (M.unit && M.armed) {
+			const piece = M.armed === "__single__" ? null : M.armed;
+			M.unit = await call("mapping.map_tag", { epc: code, serial_no: M.unit.name, component: piece, device: null });
+			snack("Tag saved");
+			armNext();
+			renderUnit();
+			if (!M.armed) loadPending();
+			return;
+		}
+		await openUnit(code);
+	});
+
+	$("m-pending").addEventListener("click", (e) => {
+		const b = e.target.closest("[data-open]");
+		if (b) openUnit(b.dataset.open).then(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+	});
+
+	$("m-unit").addEventListener("click", async (e) => {
+		if (e.target.closest("#m-release")) {
+			M.unit = await call("mapping.release_return", { serial_no: M.unit.name });
+			armNext();
+			renderUnit();
+			loadPending();
+			return;
+		}
+		const more = e.target.closest("[data-more]");
+		if (more) return pieceMenu(more.dataset.more);
+		const row = e.target.closest("[data-piece]");
+		if (row) {
+			const p = pieces(M.unit).find((x) => (x.name || "__single__") === row.dataset.piece);
+			if (p && !p.rfid_tag) {
+				M.armed = row.dataset.piece;
+				renderUnit();
+				$("m-scan").focus();
+			}
+		}
+	});
+
+	function pieceMenu(key) {
+		const p = pieces(M.unit).find((x) => (x.name || "__single__") === key);
+		const items = [];
+		if (p.rfid_tag)
+			items.push({
+				icon: "sync",
+				label: "Replace damaged tag",
+				run: async () => {
+					const fresh = prompt(`Scan the NEW tag for ${p.role}`);
+					if (!fresh) return;
+					M.unit = await call("mapping.replace_tag", { old_epc: p.rfid_tag, new_epc: fresh.trim(), reason: "Tag damaged" });
+					snack("Old tag retired, new tag saved");
+					renderUnit();
+				},
+			});
+		if (p.name && p.status === "Tagged")
+			items.push({
+				icon: "content_cut",
+				label: "Send to alteration",
+				run: async () => {
+					const who = prompt("Who is altering it?");
+					if (!who) return;
+					M.unit = await call("mapping.set_alteration", { component: p.name, out: 1, custodian: who });
+					renderUnit();
+				},
+			});
+		if (p.name && p.status === "Out for Alteration")
+			items.push({
+				icon: "undo",
+				label: "Back from alteration",
+				run: async () => {
+					M.unit = await call("mapping.set_alteration", { component: p.name, out: 0 });
+					armNext();
+					renderUnit();
+				},
+			});
+		if (!items.length) return snack("No actions for this piece");
+		sheet(p.role, items);
+	}
+
+	// ------------------------------------------------------------ remove tags
+	onScan($("d-scan"), async (codes) => {
+		const out = await call("mapping.detach", { codes });
+		const ok = out.filter((r) => r.ok).length;
+		snack(ok ? `${ok} tag${ok > 1 ? "s" : ""} released` : "Nothing released", !ok);
+		$("d-out").insertAdjacentHTML(
+			"afterbegin",
+			out
+				.map(
+					(r) => `<div class="row"><span class="lead ${r.ok ? "ok" : "bad"}">${icon(r.ok ? "check" : "block")}</span>
+					<div class="grow"><b>${esc(r.message)}</b><small>${esc(r.epc)}</small></div></div>`
+				)
+				.join("")
+		);
+	});
+
+	// ------------------------------------------------------------ exit gate
+	onScan($("g-scan"), async (codes) => {
+		const r = await call("gate.gate_read", { codes, device: $("g-device").value || null });
+		const light = $("g-light");
+		light.className = `gate ${r.alarm ? "alarm" : "clear"}`;
+		light.innerHTML = r.alarm ? `${icon("warning")}<b>Unpaid item - stop</b>` : `${icon("verified_user")}<b>All clear</b>`;
+		if (r.alarm && navigator.vibrate) navigator.vibrate([300, 100, 300]);
+		$("g-out").innerHTML = r.events
 			.map(
-				(p) => `<label class="pay">${esc(p.mode_of_payment)}
-				<input type="number" min="0" step="0.01" data-mode="${esc(p.mode_of_payment)}" value="0"></label>`
+				(e) => `<div class="row"><span class="lead ${e.alarm ? "bad" : "ok"}">${icon(e.alarm ? "priority_high" : "check")}</span>
+				<div class="grow"><b>${esc(e.message)}</b><small>${esc(e.epc)}</small></div></div>`
 			)
 			.join("");
-	}
-	$("c-counter").addEventListener("change", renderPayments);
-
-	function renderBasket(v) {
-		C.view = v;
-		C.basket = v.basket;
-		$("c-basket").textContent = `${v.basket} · ${v.status} · ${v.read_count} unique reads`;
-		$("c-lines").innerHTML = v.lines.length
-			? v.lines
-					.map((ln) => {
-						const pieces = ln.is_set
-							? ln.pieces.map((p) => `<span class="chip ${p.verified ? "ok" : "bad"}">${esc(p.role)}</span>`).join("")
-							: '<span class="chip ok">single</span>';
-						return `<tr class="${ln.complete ? "" : "blocked"}">
-							<td><b>${esc(ln.item_name)}</b><br><small>${esc(ln.item_code)}</small></td>
-							<td>${esc(ln.serial_no)}</td><td>${pieces}${ln.complete ? "" : '<div class="warn">Incomplete set - read missing pieces</div>'}</td>
-							<td class="num">${ln.complete ? money(ln.rate) : "—"}</td>
-							<td><button class="btn ghost small" data-remove="${esc(ln.serial_no)}">Remove</button></td></tr>`;
-					})
-					.join("")
-			: '<tr><td colspan="5" class="muted">Tray is empty.</td></tr>';
-		const t = v.totals || {};
-		$("c-totals").innerHTML = `<dt>Net</dt><dd>${money(t.net_total)}</dd><dt>GST</dt><dd>${money(t.total_taxes)}</dd>
-			<dt class="grand">Total</dt><dd class="grand">${money(t.rounded_total)}</dd>`;
-		$("c-checkout").disabled = !v.lines.length || v.blocked || v.status !== "Open";
-		const first = document.querySelector("#c-payments input");
-		if (first && !C.touchedPay) first.value = t.rounded_total || 0;
-	}
-
-	function renderEvents(events) {
-		$("c-events").innerHTML = (events || [])
-			.map((e) => `<div class="event ${e.level}">${esc(e.code)}: ${esc(e.message)}</div>`)
-			.join("");
-	}
-
-	$("c-open").onclick = async () => {
-		C.touchedPay = false;
-		$("c-result").innerHTML = "";
-		const dev = counter()?.devices?.[0] || null;
-		renderBasket(await call("pos.open_basket", { pos_profile: $("c-counter").value, device: dev }));
-		$("c-reads").focus();
-	};
-	$("c-read").onclick = async () => {
-		if (!C.basket) return toast("Start a basket first", true);
-		const codes = lines($("c-reads").value);
-		if (!codes.length) return;
-		const v = await call("pos.scan", { basket: C.basket, codes, source: $("c-label").checked ? "Barcode" : "RFID" });
-		$("c-reads").value = "";
-		renderBasket(v);
-		renderEvents(v.events);
-	};
-	$("c-reads").addEventListener("keydown", (e) => {
-		if (e.key === "Enter" && !e.shiftKey) {
-			e.preventDefault();
-			$("c-read").click();
-		}
 	});
-	$("c-lines").addEventListener("click", async (e) => {
-		const s = e.target.dataset.remove;
-		if (s) renderBasket(await call("pos.remove_unit", { basket: C.basket, serial_no: s }));
-	});
-	$("c-payments").addEventListener("input", () => (C.touchedPay = true));
-	$("c-find").onclick = async () => {
-		const found = await call("pos.find_customer", { mobile: $("c-mobile").value }, false);
-		if (found.length) return pickCustomer(found[0]);
-		$("c-cust").textContent = "Not found - add as new customer";
-		$("c-newcust").classList.remove("hidden");
-	};
-	$("c-create").onclick = async () => {
-		const name = await call("pos.create_customer", { customer_name: $("c-custname").value, mobile: $("c-mobile").value });
-		$("c-newcust").classList.add("hidden");
-		pickCustomer({ name, customer_name: $("c-custname").value });
-	};
-	async function pickCustomer(c) {
-		C.customer = c.name;
-		const lp = await call("pos.loyalty_balance", { customer: c.name }, false);
-		$("c-cust").innerHTML = `<b>${esc(c.customer_name)}</b> · ${esc(c.mobile_no || "")}<br>
-			${lp.program ? `${esc(lp.program)}: <b>${lp.points}</b> points` : "No loyalty program"}`;
-		$("c-loyalty").classList.toggle("hidden", !lp.points);
-	}
-	$("c-checkout").onclick = async () => {
-		const payments = [...document.querySelectorAll("#c-payments input")].map((i) => ({
-			mode_of_payment: i.dataset.mode,
-			amount: Number(i.value || 0),
-		}));
-		$("c-checkout").disabled = true;
-		try {
-			const r = await call("pos.checkout", {
-				basket: C.basket,
-				payments,
-				customer: C.customer,
-				redeem_points: Number($("c-redeem").value || 0),
-			});
-			$("c-result").innerHTML = `<div class="event ok">Sale complete: <b>${esc(r.sales_invoice)}</b>
-				${r.change_amount ? ` · change ${money(r.change_amount)}` : ""}<br>
-				<a target="_blank" href="/printview?doctype=Sales%20Invoice&name=${encodeURIComponent(r.sales_invoice)}&trigger_print=1">Print receipt</a> ·
-				<a target="_blank" href="/app/sales-invoice/${encodeURIComponent(r.sales_invoice)}">Open invoice</a><br>
-				Now detach the tags (Detach tab).</div>`;
-			renderBasket(await call("pos.basket_view", { basket: C.basket }, false));
-			C.customer = null;
-			$("c-cust").textContent = "Walk-in customer";
-		} finally {
-			$("c-checkout").disabled = C.view?.status !== "Open";
-		}
-	};
-	$("c-cancel").onclick = async () => {
-		if (!C.basket || !confirm("Cancel this basket? Garments return to the floor.")) return;
-		await call("pos.cancel_basket", { basket: C.basket });
-		renderBasket(await call("pos.basket_view", { basket: C.basket }, false));
+
+	// ------------------------------------------------------------ stock count
+	const A = { session: null, area: "Sales Floor", reads: new Set() };
+	const store = {
+		get: () => {
+			try {
+				return JSON.parse(localStorage.getItem("rfid_audit") || "null");
+			} catch (e) {
+				return null;
+			}
+		},
+		set: (v) => {
+			try {
+				localStorage.setItem("rfid_audit", JSON.stringify(v));
+			} catch (e) {}
+		},
 	};
 
-	// ------------------------------------------------------------ mapping
-	let M = null;
-	function renderUnit(u) {
-		M = u;
-		$("m-component").value = "";
-		const comps = u.components
-			? `<table class="lines"><thead><tr><th>Piece</th><th>Label</th><th>Status</th><th>Tag</th><th></th></tr></thead><tbody>
-				${u.components
-					.map(
-						(c) => `<tr><td>${esc(c.role)}</td><td>${esc(c.name)}</td><td>${esc(c.status)}</td><td>${esc(c.rfid_tag || "—")}</td>
-						<td>${c.rfid_tag ? "" : `<button class="btn small" data-pick="${esc(c.name)}">Tag this</button>`}
-						${c.status === "Tagged" ? `<button class="btn ghost small" data-alter="${esc(c.name)}">Send to alteration</button>` : ""}
-						${c.status === "Out for Alteration" ? `<button class="btn ghost small" data-back="${esc(c.name)}">Back from alteration</button>` : ""}</td></tr>`
-					)
-					.join("")}</tbody></table>`
-			: `<p>Standalone garment · tag: <b>${esc(u.tag || "none")}</b></p>`;
-		$("m-detail").innerHTML = `<h3>${esc(u.item_name)} <small>${esc(u.item_code)}</small></h3>
-			<p>Unit <b>${esc(u.name)}</b> · ${esc(u.warehouse || "")} · RFID status <span class="chip">${esc(u.custom_rfid_status)}</span>
-			${u.custom_rfid_status === "Returned - Hold" ? '<button class="btn small" id="m-release">Return checked - release</button>' : ""}</p>
-			${comps}
-			<h4>Tag history</h4><table class="lines"><tbody>${u.history
-				.map(
-					(h) => `<tr><td>${esc(h.tag)}</td><td>${esc(h.role || "")}</td><td>${esc(h.status)}</td><td>${esc(h.assigned_on)}</td>
-					<td>${esc(h.close_reason || "")}</td><td>${esc(h.sales_invoice || "")}</td></tr>`
-				)
-				.join("") || '<tr><td class="muted">No tags yet</td></tr>'}</tbody></table>`;
-	}
-	$("m-load").onclick = async () => renderUnit(await call("mapping.unit_detail", { serial_no: $("m-unit").value }, false));
-	$("m-unit").addEventListener("keydown", (e) => e.key === "Enter" && $("m-load").click());
-	$("m-pending").onclick = async () => {
-		const rows = await call("mapping.pending_units", {}, false);
-		$("m-detail").innerHTML = `<table class="lines"><thead><tr><th>Unit</th><th>Item</th><th>Status</th><th></th></tr></thead><tbody>
-			${rows
-				.map(
-					(r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.item_name)}</td><td>${esc(r.custom_rfid_status)}${r.custom_is_garment_set ? " · set" : ""}</td>
-					<td><button class="btn small" data-open="${esc(r.name)}">Open</button></td></tr>`
-				)
-				.join("") || '<tr><td class="muted">Nothing waiting</td></tr>'}</tbody></table>`;
-	};
-	$("m-detail").addEventListener("click", async (e) => {
-		const d = e.target.dataset;
-		if (d.open) {
-			$("m-unit").value = d.open;
-			return $("m-load").click();
-		}
-		if (d.pick) {
-			$("m-component").value = d.pick;
-			return $("m-epc").focus();
-		}
-		if (d.alter) {
-			const who = prompt("Tailor / custodian name?");
-			if (who) renderUnit(await call("mapping.set_alteration", { component: d.alter, out: 1, custodian: who }));
-		}
-		if (d.back) renderUnit(await call("mapping.set_alteration", { component: d.back, out: 0 }));
-		if (e.target.id === "m-release") renderUnit(await call("mapping.release_return", { serial_no: M.name }));
-	});
-	$("m-map").onclick = async () => {
-		if (!M) return toast("Open a unit first", true);
-		renderUnit(
-			await call("mapping.map_tag", {
-				epc: $("m-epc").value,
-				serial_no: M.name,
-				component: $("m-component").value || null,
-				device: $("m-device").value || null,
-			})
-		);
-		$("m-epc").value = "";
-		toast("Tag bound");
-	};
-	$("m-epc").addEventListener("keydown", (e) => e.key === "Enter" && $("m-map").click());
-	$("m-replace").onclick = async () => {
-		renderUnit(
-			await call("mapping.replace_tag", {
-				old_epc: $("m-old").value,
-				new_epc: $("m-new").value,
-				reason: $("m-reason").value,
-				device: $("m-device").value || null,
-			})
-		);
-		toast("Tag replaced; old tag retired");
-	};
-
-	// ------------------------------------------------------------ detach
-	$("d-go").onclick = async () => {
-		const out = await call("mapping.detach", { codes: lines($("d-reads").value) });
-		$("d-reads").value = "";
-		$("d-out").innerHTML = out.map((r) => `<div class="event ${r.ok ? "ok" : "error"}">${esc(r.epc)}: ${esc(r.message)}</div>`).join("");
-	};
-
-	// ------------------------------------------------------------ gate
-	$("g-go").onclick = async () => {
-		const r = await call("gate.gate_read", { codes: lines($("g-reads").value), device: $("g-device").value || null });
-		$("g-reads").value = "";
-		$("g-light").className = `light ${r.alarm ? "alarm" : "clear"}`;
-		$("g-light").textContent = r.alarm ? "ALARM - unpaid garment" : "Clear";
-		$("g-out").innerHTML = r.events
-			.map((e) => `<div class="event ${e.alarm ? "error" : "ok"}">${esc(e.epc)}: ${esc(e.message)}</div>`)
-			.join("");
-	};
-
-	// ------------------------------------------------------------ audit
-	let A = null;
 	function renderAudit(s) {
-		A = s.name;
-		$("a-session").value = s.name;
-		const res = Object.entries(s.results || {})
-			.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`)
-			.join("");
-		$("a-summary").innerHTML = `<b>${esc(s.name)}</b> · <span class="chip">${esc(s.status)}</span><br>
-			${esc(s.warehouse)} · cut-off ${esc(s.cutoff || "")}<br>
-			Expected units ${s.expected_units} (${s.expected_identities} tagged pieces) · ${s.observations} unique reads in ${s.uploads} uploads<br>
-			${s.movements_after_cutoff ? `<span class="warn">${s.movements_after_cutoff} stock movements after cut-off</span><br>` : ""}
-			${s.note ? `<span class="warn">${esc(s.note)}</span>` : ""}
-			<dl class="totals">${res}</dl>
-			<a target="_blank" href="/app/rfid-audit-session/${encodeURIComponent(s.name)}">Open full result &amp; investigate</a>`;
+		A.session = s.name;
+		store.set({ session: s.name, day: new Date().toDateString() });
+		$("a-start").hidden = true;
+		$("a-run").hidden = false;
+		const r = s.results || {};
+		const stat = (label, n, cls) => `<div class="stat ${n ? cls : ""}"><b>${n || 0}</b><small>${label}</small></div>`;
+		$("a-summary").innerHTML = `<div class="unit-head"><span class="lead">${icon("inventory")}</span>
+			<div class="grow"><b>${esc(s.name)}</b><small>${esc(s.warehouse)} · ${s.expected_units} units expected · ${s.observations} tags received</small></div>
+			<span class="pill">${esc(s.status)}</span></div>
+			${s.note ? `<p class="hint">${esc(s.note)}</p>` : ""}
+			${
+				Object.keys(r).length
+					? `<div class="stats">${stat("Found", r.Matched, "ok")}${stat("Not found yet", r.Unverified, "bad")}${stat(
+							"Sets missing a piece",
+							r["Incomplete Set"],
+							"warn"
+						)}${stat("Unknown / extra tags", (r.Unexpected || 0) + (r.Unmapped || 0), "warn")}</div>
+						<a class="btn text" href="/app/rfid-audit-session/${encodeURIComponent(s.name)}">Open full result</a>`
+					: `<p class="hint">Scan each area, upload, then press Compare.</p>`
+			}`;
+		$("a-submit").disabled = !["Comparison Ready", "Investigation Pending"].includes(s.status);
 	}
-	$("a-start").onclick = async () =>
-		renderAudit(await call("audit.start", { warehouse: $("a-wh").value, device: $("a-device").value || null }));
-	$("a-open").onclick = async () => renderAudit(await call("audit.summary", { session: $("a-session").value }, false));
-	$("a-upload").onclick = async () => {
-		if (!A) return toast("Start or open a session", true);
-		renderAudit(
-			await call("audit.upload", {
-				session: A,
-				batch_id: `${$("a-device").value || "HH"}-${Date.now()}`,
-				codes: lines($("a-reads").value),
-				area: $("a-area").value,
-				device: $("a-device").value || null,
-			})
-		);
-		$("a-reads").value = "";
-	};
-	$("a-compare").onclick = async () => A && renderAudit(await call("audit.compare", { session: A }));
-	$("a-submit").onclick = async () => A && renderAudit(await call("audit.submit_for_review", { session: A }));
 
-	const first = document.querySelector("#tabs button");
-	if (first) $(`tab-${first.dataset.tab}`).classList.add("active");
-	if (RFID.tabs.includes("counter")) loadCounters().catch(() => {});
+	onOpen.audit = async () => {
+		const saved = store.get();
+		if (!A.session && saved && saved.day === new Date().toDateString()) {
+			const s = await call("audit.summary", { session: saved.session }, false).catch(() => null);
+			if (s && !["Submitted for Review", "Reviewed"].includes(s.status)) renderAudit(s);
+		}
+	};
+
+	$("a-begin").addEventListener("click", async () => {
+		renderAudit(await call("audit.start", { warehouse: $("a-wh").value, device: $("a-device").value || null }));
+	});
+	$("a-areas").addEventListener("click", (e) => {
+		const chip = e.target.closest("[data-area]");
+		if (!chip) return;
+		document.querySelectorAll("#a-areas .chip").forEach((c) => c.classList.toggle("on", c === chip));
+		A.area = chip.dataset.area;
+	});
+	onScan($("a-scan"), async (codes) => {
+		codes.forEach((c) => A.reads.add(c.toUpperCase()));
+		$("a-pending").textContent = A.reads.size;
+	});
+	$("a-upload").addEventListener("click", async () => {
+		if (!A.reads.size) return snack("Scan some tags first", true);
+		const s = await call("audit.upload", {
+			session: A.session,
+			batch_id: `${$("a-device").value || "HH"}-${Date.now()}`,
+			codes: [...A.reads],
+			area: A.area,
+			device: $("a-device").value || null,
+		});
+		A.reads.clear();
+		$("a-pending").textContent = 0;
+		snack("Uploaded");
+		renderAudit(s);
+	});
+	$("a-compare").addEventListener("click", async () => renderAudit(await call("audit.compare", { session: A.session })));
+	$("a-submit").addEventListener("click", async () => {
+		renderAudit(await call("audit.submit_for_review", { session: A.session }));
+		snack("Sent to the manager for review");
+	});
+
+	show();
 })();

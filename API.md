@@ -12,6 +12,7 @@ cannot bypass set verification, counter locking or the sale-before-detach rule.
 
 | Method | Args | Returns |
 |---|---|---|
+| `counter_config` | `pos_profile` | `{enabled, require_scan, allow_label_fallback, device}` for a POS frontend; never throws (used by POS Next RFID mode) |
 | `get_counters` | – | POS Profiles the user may bill on, with tray devices and payment modes |
 | `open_basket` | `pos_profile`, `device?` | basket view (reuses the cashier's open basket) |
 | `scan` | `basket`, `codes[]`, `source` = RFID/Barcode/Manual | basket view + `events[]` (rejected reads) |

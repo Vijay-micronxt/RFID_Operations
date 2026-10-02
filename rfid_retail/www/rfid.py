@@ -30,6 +30,14 @@ def get_context(context):
 	context.user_fullname = frappe.utils.get_fullname(frappe.session.user)
 	context.company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value(
 		"Global Defaults", "default_company") or ""
-	context.warehouses = frappe.get_all("Warehouse", {"is_group": 0, "company": context.company}, pluck="name")
-	context.devices = frappe.get_all("RFID Device", {"is_active": 1}, ["name", "device_type", "pos_profile"])
+	# Billing runs in POS Next's RFID counter mode when that app is present.
+	context.pos_url = "/pos" if "pos_next" in frappe.get_installed_apps() else None
+	if context.pos_url is None and "counter" in context.tabs:
+		context.tabs.remove("counter")
+	context.devices = frappe.get_all("RFID Device", {"is_active": 1}, ["name", "device_type", "pos_profile", "warehouse"])
+	# Warehouses with RFID devices first, so the handheld's own floor is the default count.
+	device_wh = {d.warehouse for d in context.devices if d.warehouse}
+	context.warehouses = sorted(
+		frappe.get_all("Warehouse", {"is_group": 0, "company": context.company}, pluck="name"),
+		key=lambda w: (w not in device_wh, w))
 	return context

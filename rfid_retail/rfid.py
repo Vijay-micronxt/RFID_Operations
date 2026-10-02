@@ -143,6 +143,9 @@ def get_or_create_tag(epc):
 
 
 def assign_tag(epc, serial_no, component=None, device=None, remarks=None):
+	code = normalize(epc)
+	if frappe.db.exists("Serial No", code) or frappe.db.exists("Garment Component", code):
+		frappe.throw(_("{0} is a garment label, not an RFID tag. Read the tag itself.").format(code))
 	tag = get_or_create_tag(epc)
 	if tag.status in (TAG_DAMAGED, TAG_RETIRED):
 		log_exception_on_failure("Retired Tag Read", _("Tag {0} is {1} and cannot be mapped.").format(tag.name, tag.status),

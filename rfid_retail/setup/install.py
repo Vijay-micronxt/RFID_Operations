@@ -107,6 +107,11 @@ def get_custom_fields():
 			{"fieldname": "custom_sales_invoice", "fieldtype": "Link", "label": "Sold On",
 				"options": "Sales Invoice", "read_only": 1, "insert_after": "custom_rfid_basket"},
 		],
+		"POS Profile": [
+			{"fieldname": "custom_rfid_counter", "fieldtype": "Check", "label": "RFID Counter",
+				"insert_after": "warehouse",
+				"description": "Bill this counter from RFID tray reads (RFID Settings must be enabled)."},
+		],
 		"Sales Invoice": [basket],
 		"POS Invoice": [basket],
 		"Sales Invoice Item": [manifest],

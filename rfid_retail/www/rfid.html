@@ -2,145 +2,153 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<meta name="theme-color" content="#3949ab">
 	<title>RFID Stations</title>
-	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=1">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
+	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=2">
 </head>
 <body>
-<header class="topbar">
-	<div class="brand">{{ company }} <span>RFID</span></div>
-	{% set labels = {"counter": "Billing Counter", "mapping": "Tag Mapping", "detach": "Detach", "gate": "Exit Gate", "audit": "Stock Audit"} %}
-	<nav id="tabs">
-		{% for t in tabs %}<button data-tab="{{ t }}" class="{{ 'active' if loop.first else '' }}">{{ labels[t] }}</button>{% endfor %}
-	</nav>
-	<div class="who">{{ user_fullname }} · <a href="/app">Desk</a></div>
+<header class="appbar">
+	<button class="icon-btn" id="back" aria-label="Back" hidden><span class="ms">arrow_back</span></button>
+	<h1 id="title">RFID Stations</h1>
+	<a class="icon-btn" href="/app" aria-label="Open desk"><span class="ms">apps</span></a>
+	<div class="avatar" title="{{ user_fullname }}">{{ (user_fullname or "?")[0] }}</div>
 </header>
 
-<main>
-{% if not enabled %}<div class="panel narrow"><h3>RFID is switched off</h3><p class="muted">Turn it on in <a href="/app/rfid-settings">RFID Settings</a>.</p></div>{% endif %}
-<!-- ============================================================ COUNTER -->
-<section id="tab-counter" class="tab">
-	<div class="grid">
-		<div class="panel">
-			<div class="row">
-				<label>Counter <select id="c-counter"></select></label>
-				<button id="c-open" class="btn">Start basket</button>
-				<span id="c-basket" class="muted"></span>
-			</div>
-			<div class="reader">
-				<label>Tray reads / scanned labels <small>(reader bridge types EPCs here; paste many, one per line)</small></label>
-				<textarea id="c-reads" rows="3" placeholder="E28011700000020A1B2C3D01"></textarea>
-				<div class="row">
-					<button id="c-read" class="btn primary">Read tray</button>
-					<label class="muted"><input type="checkbox" id="c-label"> These are printed labels (barcode fallback)</label>
-				</div>
-			</div>
-			<div id="c-events"></div>
-			<table class="lines">
-				<thead><tr><th>Item</th><th>Unit</th><th>Pieces</th><th class="num">Rate</th><th></th></tr></thead>
-				<tbody id="c-lines"><tr><td colspan="5" class="muted">Start a basket and place garments on the tray.</td></tr></tbody>
-			</table>
-		</div>
-		<div class="panel side">
-			<h3>Customer</h3>
-			<div class="row"><input id="c-mobile" placeholder="Mobile number"><button id="c-find" class="btn">Find</button></div>
-			<div id="c-cust" class="muted">Walk-in customer</div>
-			<div id="c-newcust" class="hidden row"><input id="c-custname" placeholder="Name"><button id="c-create" class="btn">Add customer</button></div>
-			<div id="c-loyalty" class="hidden row"><label>Redeem points <input id="c-redeem" type="number" min="0" value="0"></label></div>
-			<h3>Bill</h3>
-			<dl class="totals" id="c-totals"></dl>
-			<h3>Payment</h3>
-			<div id="c-payments"></div>
-			<button id="c-checkout" class="btn primary big" disabled>Complete sale</button>
-			<button id="c-cancel" class="btn ghost">Cancel basket</button>
-			<div id="c-result"></div>
-		</div>
+<main id="app">
+{% if not enabled %}
+	<div class="empty">
+		<span class="ms big">sensors_off</span>
+		<h2>RFID is switched off</h2>
+		<p>Turn it on in <a href="/app/rfid-settings">RFID Settings</a>.</p>
+	</div>
+{% else %}
+
+<!-- ================================================================ HOME -->
+<section class="screen active" data-screen="home">
+	<p class="hello">Hello, {{ user_fullname.split(" ")[0] }}</p>
+	<div class="tiles">
+		{% if "counter" in tabs %}
+		<a class="tile" href="{{ pos_url }}">
+			<span class="ms tile-icon" style="--c:#3949ab">point_of_sale</span>
+			<b>Billing</b><small>Open the POS counter</small>
+		</a>
+		{% endif %}
+		{% if "mapping" in tabs %}
+		<button class="tile" data-go="mapping">
+			<span class="ms tile-icon" style="--c:#00897b">sell</span>
+			<b>Tag garments</b><small>Put tags on new stock</small>
+		</button>
+		{% endif %}
+		{% if "detach" in tabs %}
+		<button class="tile" data-go="detach">
+			<span class="ms tile-icon" style="--c:#6d4c41">content_cut</span>
+			<b>Remove tags</b><small>After a sale is paid</small>
+		</button>
+		{% endif %}
+		{% if "gate" in tabs %}
+		<button class="tile" data-go="gate">
+			<span class="ms tile-icon" style="--c:#c62828">door_open</span>
+			<b>Exit gate</b><small>Check what is leaving</small>
+		</button>
+		{% endif %}
+		{% if "audit" in tabs %}
+		<button class="tile" data-go="audit">
+			<span class="ms tile-icon" style="--c:#ef6c00">inventory</span>
+			<b>Stock count</b><small>Daily handheld count</small>
+		</button>
+		{% endif %}
 	</div>
 </section>
 
-<!-- ============================================================ MAPPING -->
-<section id="tab-mapping" class="tab">
-	<div class="grid">
-		<div class="panel">
-			<div class="row">
-				<input id="m-unit" placeholder="Serial no / piece label / tag">
-				<button id="m-load" class="btn primary">Open unit</button>
-				<button id="m-pending" class="btn">Units waiting for tags</button>
-			</div>
-			<div id="m-detail"></div>
-		</div>
-		<div class="panel side">
-			<h3>Map a tag</h3>
-			<p class="muted">Pick a piece on the left, then read ONE tag on the desktop reader.</p>
-			<label>Piece <input id="m-component" readonly placeholder="(standalone garment)"></label>
-			<label>Tag read <input id="m-epc" placeholder="EPC from desktop reader"></label>
-			<label>Reader <select id="m-device" class="device-select" data-type="Desktop Reader"></select></label>
-			<button id="m-map" class="btn primary">Bind tag</button>
-			<h3>Replace damaged tag</h3>
-			<label>Old tag <input id="m-old"></label>
-			<label>New tag <input id="m-new"></label>
-			<label>Reason <input id="m-reason" value="Tag Damaged"></label>
-			<button id="m-replace" class="btn">Replace</button>
-			<div id="m-msg"></div>
-		</div>
+<!-- ================================================================ TAG GARMENTS -->
+<section class="screen" data-screen="mapping" data-title="Tag garments">
+	<div class="scanbar">
+		<span class="ms">qr_code_scanner</span>
+		<input id="m-scan" autocomplete="off" placeholder="Scan the garment label">
 	</div>
+	<p class="hint" id="m-hint">Scan a serial number or piece label to start.</p>
+
+	<div id="m-unit"></div>
+
+	<h3 class="section">Waiting for tags <span class="badge" id="m-count">0</span></h3>
+	<div class="list" id="m-pending"></div>
 </section>
 
-<!-- ============================================================ DETACH -->
-<section id="tab-detach" class="tab">
-	<div class="panel narrow">
-		<p class="muted">Only tags of COMPLETED sales are released back to the reusable pool.</p>
-		<textarea id="d-reads" rows="4" placeholder="Tag reads"></textarea>
-		<button id="d-go" class="btn primary">Release tags</button>
-		<div id="d-out"></div>
+<!-- ================================================================ REMOVE TAGS -->
+<section class="screen" data-screen="detach" data-title="Remove tags">
+	<div class="scanbar">
+		<span class="ms">nfc</span>
+		<input id="d-scan" autocomplete="off" placeholder="Scan tags of the paid garments">
 	</div>
+	<p class="hint">Only tags of completed sales are released for reuse.</p>
+	<div class="list" id="d-out"></div>
 </section>
 
-<!-- ============================================================ GATE -->
-<section id="tab-gate" class="tab">
-	<div class="panel narrow">
-		<label>Gate <select id="g-device" class="device-select" data-type="Exit Gate"></select></label>
-		<textarea id="g-reads" rows="4" placeholder="Reads at the exit portal"></textarea>
-		<button id="g-go" class="btn primary">Evaluate</button>
-		<div id="g-light" class="light">—</div>
-		<div id="g-out"></div>
+<!-- ================================================================ EXIT GATE -->
+<section class="screen" data-screen="gate" data-title="Exit gate">
+	<div id="g-light" class="gate idle">
+		<span class="ms">shield</span>
+		<b>Waiting</b>
 	</div>
+	<div class="scanbar">
+		<span class="ms">sensors</span>
+		<input id="g-scan" autocomplete="off" placeholder="Tags read at the door">
+	</div>
+	<label class="field">Gate
+		<select id="g-device" class="device-select" data-type="Exit Gate"></select>
+	</label>
+	<div class="list" id="g-out"></div>
 </section>
 
-<!-- ============================================================ AUDIT -->
-<section id="tab-audit" class="tab">
-	<div class="grid">
-		<div class="panel">
-			<div class="row">
-				<label>Warehouse <select id="a-wh">{% for w in warehouses %}<option>{{ w }}</option>{% endfor %}</select></label>
-				<label>Handheld <select id="a-device" class="device-select" data-type="Handheld"></select></label>
-				<button id="a-start" class="btn primary">Start today's count</button>
-			</div>
-			<div class="row"><input id="a-session" placeholder="or open session AUD-..."><button id="a-open" class="btn">Open</button></div>
-			<label>Area <select id="a-area"><option>Sales Floor</option><option>Stockroom</option><option>Trial Rooms</option><option>Returns/Hold</option><option>Alteration</option></select></label>
-			<textarea id="a-reads" rows="5" placeholder="Handheld reads for this area"></textarea>
-			<div class="row">
-				<button id="a-upload" class="btn">Upload batch</button>
-				<button id="a-compare" class="btn primary">Compare</button>
-				<button id="a-submit" class="btn">Submit for review</button>
-			</div>
+<!-- ================================================================ STOCK COUNT -->
+<section class="screen" data-screen="audit" data-title="Stock count">
+	<div id="a-start" class="card">
+		<h3>Start today's count</h3>
+		<label class="field">Warehouse
+			<select id="a-wh">{% for w in warehouses %}<option>{{ w }}</option>{% endfor %}</select>
+		</label>
+		<label class="field">Handheld
+			<select id="a-device" class="device-select" data-type="Handheld"></select>
+		</label>
+		<button class="btn filled wide" id="a-begin"><span class="ms">play_arrow</span>Start count</button>
+	</div>
+
+	<div id="a-run" hidden>
+		<div class="chips" id="a-areas">
+			{% for area in ["Sales Floor", "Stockroom", "Trial Rooms", "Returns/Hold", "Alteration"] %}
+			<button class="chip {{ 'on' if loop.first else '' }}" data-area="{{ area }}">{{ area }}</button>
+			{% endfor %}
 		</div>
-		<div class="panel side">
-			<h3>Session</h3>
-			<div id="a-summary" class="muted">No session open</div>
+		<div class="scanbar">
+			<span class="ms">barcode_reader</span>
+			<input id="a-scan" autocomplete="off" placeholder="Handheld reads for this area">
+		</div>
+		<div class="counter-row">
+			<span><b id="a-pending">0</b> tags read, not uploaded</span>
+			<button class="btn tonal" id="a-upload"><span class="ms">cloud_upload</span>Upload</button>
+		</div>
+		<div class="card" id="a-summary"></div>
+		<div class="actions">
+			<button class="btn filled" id="a-compare"><span class="ms">compare_arrows</span>Compare</button>
+			<button class="btn tonal" id="a-submit"><span class="ms">send</span>Send for review</button>
 		</div>
 	</div>
 </section>
+{% endif %}
 </main>
-<div id="toast"></div>
+
+<div id="snackbar" role="status"></div>
 <script>
 	window.RFID = {
 		csrf: "{{ csrf_token }}",
 		devices: {{ devices | tojson }},
-		stations: {{ stations | tojson }},
 		tabs: {{ tabs | tojson }}
 	};
 </script>
-<script src="/assets/rfid_retail/js/rfid_station.js?v=1"></script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=2"></script>
 </body>
 </html>

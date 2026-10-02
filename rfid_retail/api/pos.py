@@ -31,6 +31,26 @@ def _basket(name, for_update=False):
 
 
 @frappe.whitelist()
+def counter_config(pos_profile):
+	"""What a POS frontend needs to switch into RFID mode for this counter. Never throws."""
+	from rfid_retail.settings import is_enabled
+
+	off = {"enabled": False}
+	if not is_enabled() or not cint(frappe.db.get_value("POS Profile", pos_profile, "custom_rfid_counter")):
+		return off
+	if not has_station("Billing"):
+		return off
+	return {
+		"enabled": True,
+		"require_scan": cint(setting("require_scan_for_sale")),
+		"allow_label_fallback": cint(setting("allow_label_fallback")),
+		"block_untracked_items": cint(setting("block_untracked_items")),
+		"device": frappe.db.get_value("RFID Device",
+			{"pos_profile": pos_profile, "device_type": "Tray Reader", "is_active": 1}, "name"),
+	}
+
+
+@frappe.whitelist()
 def get_counters():
 	require_station("Billing")
 	profiles = frappe.get_all("POS Profile", filters={"disabled": 0}, fields=["name", "warehouse", "company"])
