@@ -1,4 +1,4 @@
-/* RFID stations: a thin, mobile-first client over rfid_retail.api.*. Every rule lives on the server. */
+/* RFID stations: a thin client over rfid_retail.api.*. Every rule lives on the server. */
 (() => {
 	const $ = (id) => document.getElementById(id);
 	const esc = (v) =>
@@ -79,7 +79,7 @@
 			const back = document.createElement("div");
 			back.className = "dialog-back";
 			back.innerHTML = `<div class="dialog"><h3>${esc(title)}</h3>
-				<input class="big-input" placeholder="${esc(placeholder)}">
+				<input class="field-lg" placeholder="${esc(placeholder)}">
 				<div class="dialog-actions"><button class="btn text" data-r="0">Cancel</button><button class="btn text" data-r="1">OK</button></div></div>`;
 			const input = back.querySelector("input");
 			const close = (ok) => {
@@ -97,24 +97,19 @@
 		});
 	}
 
-	// ------------------------------------------------------------ navigation (hash, so Android back works)
+	// ------------------------------------------------------------ navigation: header tabs + hash (browser back works)
 	const screens = [...document.querySelectorAll(".screen")];
-	if (!screens.length) return; // RFID switched off: the page only shows a notice
+	if (!screens.length) return; // RFID off, or billing only: the page shows a notice
 	const onOpen = {};
 	function show() {
-		const name = location.hash.slice(1) || "home";
+		const name = location.hash.slice(1);
 		const target = screens.find((s) => s.dataset.screen === name) || screens[0];
-		if (!target) return;
 		screens.forEach((s) => s.classList.toggle("active", s === target));
-		const home = target.dataset.screen === "home";
-		$("back").hidden = home;
-		$("title").textContent = home ? "RFID Stations" : target.dataset.title;
+		document.querySelectorAll("#tabs [data-tab]").forEach((t) => t.classList.toggle("active", t.dataset.tab === target.dataset.screen));
 		onOpen[target.dataset.screen]?.();
-		target.querySelector(".scanbar input")?.focus();
+		target.querySelector(".scan input")?.focus();
 	}
 	window.addEventListener("hashchange", show);
-	$("back").addEventListener("click", () => history.back());
-	document.querySelectorAll("[data-go]").forEach((t) => t.addEventListener("click", () => (location.hash = t.dataset.go)));
 
 	document.querySelectorAll(".device-select").forEach((sel) => {
 		const opts = RFID.devices.filter((d) => d.device_type === sel.dataset.type);
@@ -123,7 +118,7 @@
 	});
 
 	// ------------------------------------------------------------ tag garments
-	// Two clear states: pick a garment (m-pick), then tag its pieces one by one (m-tagging).
+	// Left: garments waiting for tags. Right: the chosen garment, one piece at a time.
 	const M = { unit: null, current: null };
 	const keyOf = (p) => p.name || "__single__";
 
@@ -137,30 +132,32 @@
 		M.current = next ? keyOf(next) : null;
 	}
 
-	function showPick() {
-		M.unit = null;
-		$("m-pick").hidden = false;
-		$("m-tagging").hidden = true;
-		loadPending();
-		$("m-code").focus();
+	function highlightPending() {
+		document.querySelectorAll("#m-pending [data-open]").forEach((b) => b.classList.toggle("selected", b.dataset.open === M.unit?.name));
 	}
 
 	function renderUnit() {
 		const u = M.unit;
-		$("m-pick").hidden = true;
-		$("m-tagging").hidden = false;
+		$("m-empty").hidden = !!u;
+		$("m-tagging").hidden = !u;
+		highlightPending();
+		if (!u) return;
 		const list = pieces(u);
 		const done = list.filter((p) => p.rfid_tag).length;
+		const ready = u.custom_rfid_status === "Ready";
 		$("m-name").textContent = u.item_name;
 		$("m-meta").textContent = `${u.name} · ${u.warehouse || ""}`;
+		$("m-status").textContent = u.custom_rfid_status || "";
+		$("m-status").className = `badge${ready ? " ok" : ""}`;
 		$("m-bar").style.width = `${(done / list.length) * 100}%`;
 		$("m-progress").textContent = `${done} of ${list.length} piece${list.length > 1 ? "s" : ""} tagged`;
 
 		const current = list.find((p) => keyOf(p) === M.current);
 		$("m-now").hidden = !current;
-		$("m-done").hidden = !!current || u.custom_rfid_status !== "Ready";
+		$("m-done").hidden = !!current || !ready;
 		if (current) {
 			$("m-piece").textContent = current.role;
+			$("m-tag").value = "";
 			setTimeout(() => $("m-tag").focus(), 0);
 		}
 
@@ -169,13 +166,11 @@
 				const k = keyOf(p);
 				const away = p.status === "Out for Alteration";
 				const state = p.rfid_tag ? "done" : k === M.current ? "now" : away ? "away" : "todo";
-				const dot = state === "done" ? icon("check") : state === "away" ? icon("content_cut") : n + 1;
-				const sub = p.rfid_tag ? esc(p.rfid_tag) : away ? "At alteration" : state === "now" ? "Scan its tag now" : "Tap to tag this next";
-				return `<button class="item ${state}" data-piece="${esc(k)}">
-					<span class="dot">${dot}</span>
-					<span class="grow"><b>${esc(p.role)}</b><small>${sub}</small></span>
-					${state === "now" ? '<span class="now-chip">NOW</span>' : ""}
-				</button>`;
+				const dot = state === "done" ? icon("check", "small") : state === "away" ? icon("content_cut", "small") : n + 1;
+				const sub = p.rfid_tag ? "Tagged" : away ? "At alteration" : state === "now" ? "Waiting for its tag" : "Click to tag this one next";
+				const right = p.rfid_tag ? `<span class="tagchip">${esc(p.rfid_tag)}</span>` : state === "now" ? '<span class="nowchip">NOW</span>' : "";
+				return `<button class="item ${state}" data-piece="${esc(k)}"><span class="dot">${dot}</span>
+					<span class="grow"><b>${esc(p.role)}</b><small>${sub}</small></span>${right}</button>`;
 			})
 			.join("");
 	}
@@ -184,6 +179,8 @@
 		M.unit = await call("mapping.unit_detail", { serial_no: code }, false);
 		pickNext();
 		renderUnit();
+		// On phones the work panel sits below the list.
+		if (window.matchMedia("(max-width: 860px)").matches) $("m-tagging").scrollIntoView({ behavior: "smooth" });
 		if (M.unit.custom_rfid_status === "Returned - Hold")
 			snack("This garment came back from a customer. Check it, then use More options > Return checked.");
 	}
@@ -195,13 +192,17 @@
 			rows
 				.map(
 					(r) => `<button class="item" data-open="${esc(r.name)}">
-						<span class="ms avatar-icon">${r.custom_is_garment_set ? "checkroom" : "apparel"}</span>
+						<span class="thumb">${icon(r.custom_is_garment_set ? "checkroom" : "apparel")}</span>
 						<span class="grow"><b>${esc(r.item_name)}</b><small>${esc(r.name)}</small></span>
-						<span class="ms chevron">chevron_right</span></button>`
+						${icon("chevron_right", "muted")}</button>`
 				)
-				.join("") || `<div class="empty-row">Nothing waiting. New stock shows up here after a purchase receipt.</div>`;
+				.join("") || `<div class="empty-row">Nothing waiting. New stock appears here after a purchase receipt.</div>`;
+		highlightPending();
 	}
-	onOpen.mapping = () => (M.unit ? renderUnit() : showPick());
+	onOpen.mapping = () => {
+		loadPending();
+		renderUnit();
+	};
 
 	onScan($("m-code"), (codes) => openUnit(codes[0]));
 	onScan($("m-tag"), async (codes) => {
@@ -211,6 +212,7 @@
 		snack("Tag saved");
 		pickNext();
 		renderUnit();
+		if (!M.current) loadPending();
 	});
 
 	$("m-pending").addEventListener("click", (e) => {
@@ -225,7 +227,12 @@
 			renderUnit();
 		}
 	});
-	$("m-next").addEventListener("click", showPick);
+	$("m-next").addEventListener("click", () => {
+		M.unit = null;
+		renderUnit();
+		loadPending();
+		$("m-code").focus();
+	});
 	$("m-more").addEventListener("click", () => {
 		const u = M.unit;
 		const items = [];
@@ -263,15 +270,19 @@
 	});
 
 	// ------------------------------------------------------------ remove tags
+	let released = 0;
 	onScan($("d-scan"), async (codes) => {
 		const out = await call("mapping.detach", { codes });
 		const ok = out.filter((r) => r.ok).length;
+		released += ok;
+		$("d-count").textContent = released;
+		$("d-empty").hidden = true;
 		snack(ok ? `${ok} tag${ok > 1 ? "s" : ""} released` : "Nothing released", !ok);
 		$("d-out").insertAdjacentHTML(
 			"afterbegin",
 			out
 				.map(
-					(r) => `<div class="row"><span class="lead ${r.ok ? "ok" : "bad"}">${icon(r.ok ? "check" : "block")}</span>
+					(r) => `<div class="row"><span class="lead ${r.ok ? "ok" : "bad"}">${icon(r.ok ? "check" : "block", "small")}</span>
 					<div class="grow"><b>${esc(r.message)}</b><small>${esc(r.epc)}</small></div></div>`
 				)
 				.join("")
@@ -287,7 +298,7 @@
 		if (r.alarm && navigator.vibrate) navigator.vibrate([300, 100, 300]);
 		$("g-out").innerHTML = r.events
 			.map(
-				(e) => `<div class="row"><span class="lead ${e.alarm ? "bad" : "ok"}">${icon(e.alarm ? "priority_high" : "check")}</span>
+				(e) => `<div class="row"><span class="lead ${e.alarm ? "bad" : "ok"}">${icon(e.alarm ? "priority_high" : "check", "small")}</span>
 				<div class="grow"><b>${esc(e.message)}</b><small>${esc(e.epc)}</small></div></div>`
 			)
 			.join("");
@@ -317,19 +328,19 @@
 		$("a-run").hidden = false;
 		const r = s.results || {};
 		const stat = (label, n, cls) => `<div class="stat ${n ? cls : ""}"><b>${n || 0}</b><small>${label}</small></div>`;
-		$("a-summary").innerHTML = `<div class="unit-head"><span class="lead">${icon("inventory")}</span>
-			<div class="grow"><b>${esc(s.name)}</b><small>${esc(s.warehouse)} · ${s.expected_units} units expected · ${s.observations} tags received</small></div>
-			<span class="pill">${esc(s.status)}</span></div>
-			${s.note ? `<p class="hint">${esc(s.note)}</p>` : ""}
+		$("a-summary").innerHTML = `<div class="work-head"><div><h2>${esc(s.name)}</h2>
+				<p class="muted">${esc(s.warehouse)} · ${s.expected_units} units expected · ${s.observations} tags received</p></div>
+				<span class="badge">${esc(s.status)}</span></div>
+			${s.note ? `<p class="muted">${esc(s.note)}</p>` : ""}
 			${
 				Object.keys(r).length
 					? `<div class="stats">${stat("Found", r.Matched, "ok")}${stat("Not found yet", r.Unverified, "bad")}${stat(
 							"Sets missing a piece",
 							r["Incomplete Set"],
 							"warn"
-						)}${stat("Unknown / extra tags", (r.Unexpected || 0) + (r.Unmapped || 0), "warn")}</div>
-						<a class="btn text" href="/app/rfid-audit-session/${encodeURIComponent(s.name)}">Open full result</a>`
-					: `<p class="hint">Scan each area, upload, then press Compare.</p>`
+						)}${stat("Unknown or extra tags", (r.Unexpected || 0) + (r.Unmapped || 0), "warn")}</div>
+						<a class="btn ghost" href="/app/rfid-audit-session/${encodeURIComponent(s.name)}">${icon("open_in_new", "small")}Open full result</a>`
+					: `<div class="placeholder"><span class="ms">barcode_reader</span><h3>Counting</h3><p>Scan each area, upload, then press Compare.</p></div>`
 			}`;
 		$("a-submit").disabled = !["Comparison Ready", "Investigation Pending"].includes(s.status);
 	}

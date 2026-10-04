@@ -3,170 +3,176 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-	<meta name="theme-color" content="#1a73e8">
+	<meta name="theme-color" content="#ffffff">
 	<title>RFID Stations</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
-	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=3">
+	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=4">
 </head>
 <body>
-<header class="appbar">
-	<button class="icon-btn" id="back" aria-label="Back" hidden><span class="ms">arrow_back</span></button>
-	<h1 id="title">RFID Stations</h1>
-	<a class="icon-btn" href="/app" aria-label="Open desk"><span class="ms">apps</span></a>
-	<div class="avatar" title="{{ user_fullname }}">{{ (user_fullname or "?")[0] }}</div>
+{% set labels = {"mapping": ["sell", "Tag garments"], "detach": ["content_cut", "Remove tags"], "gate": ["door_open", "Exit gate"], "audit": ["inventory", "Stock count"]} %}
+<header class="top">
+	<div class="brand">
+		<span class="logo"><span class="ms">sensors</span></span>
+		<div><b>RFID Stations</b><small>{{ user_fullname }}</small></div>
+	</div>
+	{% if enabled %}
+	<nav class="tabs" id="tabs">
+		{% for t in tabs if t != "counter" %}
+		<a class="tab" href="#{{ t }}" data-tab="{{ t }}"><span class="ms">{{ labels[t][0] }}</span>{{ labels[t][1] }}</a>
+		{% endfor %}
+		{% if "counter" in tabs %}
+		<a class="tab link" href="{{ pos_url }}"><span class="ms">point_of_sale</span>Billing<span class="ms small">open_in_new</span></a>
+		{% endif %}
+	</nav>
+	{% endif %}
+	<a class="desk" href="/app" title="Open desk"><span class="ms">apps</span></a>
 </header>
 
-<main id="app">
+<main>
 {% if not enabled %}
-	<div class="empty">
-		<span class="ms big">sensors_off</span>
+	<div class="blank">
+		<span class="ms">sensors_off</span>
 		<h2>RFID is switched off</h2>
 		<p>Turn it on in <a href="/app/rfid-settings">RFID Settings</a>.</p>
 	</div>
+{% elif not tabs or tabs == ["counter"] %}
+	<div class="blank">
+		<span class="ms">point_of_sale</span>
+		<h2>Billing happens in the POS</h2>
+		<p><a href="{{ pos_url }}">Open the POS counter</a></p>
+	</div>
 {% else %}
 
-<!-- ================================================================ HOME -->
-<section class="screen active" data-screen="home">
-	<p class="hello">Hello, {{ user_fullname.split(" ")[0] }}</p>
-	<div class="tiles">
-		{% if "counter" in tabs %}
-		<a class="tile" href="{{ pos_url }}">
-			<span class="ms tile-icon" style="--c:#3949ab">point_of_sale</span>
-			<b>Billing</b><small>Open the POS counter</small>
-		</a>
-		{% endif %}
-		{% if "mapping" in tabs %}
-		<button class="tile" data-go="mapping">
-			<span class="ms tile-icon" style="--c:#00897b">sell</span>
-			<b>Tag garments</b><small>Put tags on new stock</small>
-		</button>
-		{% endif %}
-		{% if "detach" in tabs %}
-		<button class="tile" data-go="detach">
-			<span class="ms tile-icon" style="--c:#6d4c41">content_cut</span>
-			<b>Remove tags</b><small>After a sale is paid</small>
-		</button>
-		{% endif %}
-		{% if "gate" in tabs %}
-		<button class="tile" data-go="gate">
-			<span class="ms tile-icon" style="--c:#c62828">door_open</span>
-			<b>Exit gate</b><small>Check what is leaving</small>
-		</button>
-		{% endif %}
-		{% if "audit" in tabs %}
-		<button class="tile" data-go="audit">
-			<span class="ms tile-icon" style="--c:#ef6c00">inventory</span>
-			<b>Stock count</b><small>Daily handheld count</small>
-		</button>
-		{% endif %}
-	</div>
-</section>
-
 <!-- ================================================================ TAG GARMENTS -->
-<section class="screen" data-screen="mapping" data-title="Tag garments">
-	<!-- 1. choose the garment -->
-	<div id="m-pick">
-		<div class="prompt">
-			<span class="ms prompt-icon">qr_code_scanner</span>
-			<div class="prompt-label">Step 1</div>
-			<div class="prompt-title">Scan the garment label</div>
-			<input id="m-code" class="big-input" autocomplete="off" placeholder="e.g. SUIT-000001">
+<section class="screen split" data-screen="mapping">
+	<aside class="panel">
+		<div class="panel-head">
+			<h2>Garments to tag</h2>
+			<span class="count" id="m-count">0</span>
 		</div>
-		<div class="subheader">Waiting for tags <span class="count" id="m-count">0</span></div>
-		<div class="list" id="m-pending"></div>
-	</div>
+		<div class="scan">
+			<span class="ms">qr_code_scanner</span>
+			<input id="m-code" autocomplete="off" placeholder="Scan or type garment label">
+		</div>
+		<div class="list scroll" id="m-pending"></div>
+	</aside>
 
-	<!-- 2. tag its pieces one by one -->
-	<div id="m-tagging" hidden>
-		<div class="garment">
-			<div class="garment-name" id="m-name"></div>
-			<div class="garment-meta" id="m-meta"></div>
+	<section class="panel work">
+		<div class="placeholder" id="m-empty">
+			<span class="ms">touch_app</span>
+			<h3>Pick a garment</h3>
+			<p>Choose one from the list, or scan its label (for example SUIT-000001).</p>
+		</div>
+
+		<div id="m-tagging" hidden>
+			<div class="work-head">
+				<div>
+					<h2 id="m-name"></h2>
+					<p class="muted" id="m-meta"></p>
+				</div>
+				<span class="badge" id="m-status"></span>
+			</div>
 			<div class="progress"><span id="m-bar"></span></div>
-			<div class="garment-meta" id="m-progress"></div>
-		</div>
+			<p class="muted small" id="m-progress"></p>
 
-		<div class="prompt now" id="m-now">
-			<div class="prompt-label">Now scan the tag for</div>
-			<div class="prompt-title big" id="m-piece"></div>
-			<input id="m-tag" class="big-input" autocomplete="off" placeholder="Tag number, e.g. TAG-0001">
-		</div>
-		<div class="prompt done" id="m-done" hidden>
-			<span class="ms prompt-icon">check_circle</span>
-			<div class="prompt-title">Ready to sell</div>
-			<div class="prompt-label">Every piece has its tag</div>
-		</div>
+			<div class="callout" id="m-now">
+				<p class="eyebrow">Scan the tag for</p>
+				<p class="piece" id="m-piece"></p>
+				<input id="m-tag" class="field-lg" autocomplete="off" placeholder="Tag number, e.g. TAG-0001">
+				<p class="muted small">Press Enter after typing. The next piece is selected automatically.</p>
+			</div>
+			<div class="callout ok" id="m-done" hidden>
+				<span class="ms">check_circle</span>
+				<p class="piece">Ready to sell</p>
+				<p class="muted small">Every piece of this garment has its tag.</p>
+			</div>
 
-		<div class="subheader">Pieces</div>
-		<div class="list" id="m-steps"></div>
+			<h3 class="label">Pieces</h3>
+			<div class="list" id="m-steps"></div>
 
-		<div class="bottom-bar">
-			<button class="btn outlined" id="m-more"><span class="ms">more_horiz</span>More options</button>
-			<button class="btn filled" id="m-next"><span class="ms">arrow_forward</span>Next garment</button>
+			<div class="buttons">
+				<button class="btn ghost" id="m-more"><span class="ms">more_horiz</span>More options</button>
+				<button class="btn primary" id="m-next"><span class="ms">arrow_forward</span>Next garment</button>
+			</div>
 		</div>
-	</div>
+	</section>
 </section>
 
 <!-- ================================================================ REMOVE TAGS -->
-<section class="screen" data-screen="detach" data-title="Remove tags">
-	<div class="scanbar">
-		<span class="ms">nfc</span>
-		<input id="d-scan" autocomplete="off" placeholder="Scan tags of the paid garments">
-	</div>
-	<p class="hint">Only tags of completed sales are released for reuse.</p>
-	<div class="list" id="d-out"></div>
+<section class="screen split" data-screen="detach">
+	<aside class="panel">
+		<div class="panel-head"><h2>Remove tags</h2></div>
+		<p class="muted">After the customer has paid, read the tags here. Only tags of completed sales are released for reuse.</p>
+		<div class="scan">
+			<span class="ms">nfc</span>
+			<input id="d-scan" autocomplete="off" placeholder="Scan or type tag">
+		</div>
+	</aside>
+	<section class="panel work">
+		<div class="panel-head"><h2>Released this session</h2><span class="count" id="d-count">0</span></div>
+		<div class="list" id="d-out"></div>
+		<div class="placeholder small" id="d-empty"><span class="ms">sell</span><p>Released tags will appear here.</p></div>
+	</section>
 </section>
 
 <!-- ================================================================ EXIT GATE -->
-<section class="screen" data-screen="gate" data-title="Exit gate">
-	<div id="g-light" class="gate idle">
-		<span class="ms">shield</span>
-		<b>Waiting</b>
-	</div>
-	<div class="scanbar">
-		<span class="ms">sensors</span>
-		<input id="g-scan" autocomplete="off" placeholder="Tags read at the door">
-	</div>
-	<label class="field">Gate
-		<select id="g-device" class="device-select" data-type="Exit Gate"></select>
-	</label>
-	<div class="list" id="g-out"></div>
+<section class="screen split" data-screen="gate">
+	<aside class="panel">
+		<div class="panel-head"><h2>Exit gate</h2></div>
+		<label class="field">Gate
+			<select id="g-device" class="device-select" data-type="Exit Gate"></select>
+		</label>
+		<div class="scan">
+			<span class="ms">sensors</span>
+			<input id="g-scan" autocomplete="off" placeholder="Tags read at the door">
+		</div>
+		<p class="muted small">Paid garments pass. Anything not sold raises an alarm and an alert for the manager.</p>
+	</aside>
+	<section class="panel work">
+		<div id="g-light" class="gate idle"><span class="ms">shield</span><b>Waiting for reads</b></div>
+		<div class="list" id="g-out"></div>
+	</section>
 </section>
 
 <!-- ================================================================ STOCK COUNT -->
-<section class="screen" data-screen="audit" data-title="Stock count">
-	<div id="a-start" class="card">
-		<h3>Start today's count</h3>
-		<label class="field">Warehouse
-			<select id="a-wh">{% for w in warehouses %}<option>{{ w }}</option>{% endfor %}</select>
-		</label>
-		<label class="field">Handheld
-			<select id="a-device" class="device-select" data-type="Handheld"></select>
-		</label>
-		<button class="btn filled wide" id="a-begin"><span class="ms">play_arrow</span>Start count</button>
-	</div>
-
-	<div id="a-run" hidden>
-		<div class="chips" id="a-areas">
-			{% for area in ["Sales Floor", "Stockroom", "Trial Rooms", "Returns/Hold", "Alteration"] %}
-			<button class="chip {{ 'on' if loop.first else '' }}" data-area="{{ area }}">{{ area }}</button>
-			{% endfor %}
+<section class="screen split" data-screen="audit">
+	<aside class="panel">
+		<div class="panel-head"><h2>Stock count</h2></div>
+		<div id="a-start">
+			<label class="field">Warehouse
+				<select id="a-wh">{% for w in warehouses %}<option>{{ w }}</option>{% endfor %}</select>
+			</label>
+			<label class="field">Handheld
+				<select id="a-device" class="device-select" data-type="Handheld"></select>
+			</label>
+			<button class="btn primary wide" id="a-begin"><span class="ms">play_arrow</span>Start today's count</button>
 		</div>
-		<div class="scanbar">
-			<span class="ms">barcode_reader</span>
-			<input id="a-scan" autocomplete="off" placeholder="Handheld reads for this area">
+		<div id="a-run" hidden>
+			<label class="field">Area being counted</label>
+			<div class="chips" id="a-areas">
+				{% for area in ["Sales Floor", "Stockroom", "Trial Rooms", "Returns/Hold", "Alteration"] %}
+				<button class="chip {{ 'on' if loop.first else '' }}" data-area="{{ area }}">{{ area }}</button>
+				{% endfor %}
+			</div>
+			<div class="scan">
+				<span class="ms">barcode_reader</span>
+				<input id="a-scan" autocomplete="off" placeholder="Scan or type tag">
+			</div>
+			<div class="pending-row">
+				<span><b id="a-pending">0</b> read, not uploaded</span>
+				<button class="btn ghost" id="a-upload"><span class="ms">cloud_upload</span>Upload</button>
+			</div>
+			<div class="buttons">
+				<button class="btn ghost" id="a-submit"><span class="ms">send</span>Send for review</button>
+				<button class="btn primary" id="a-compare"><span class="ms">compare_arrows</span>Compare</button>
+			</div>
 		</div>
-		<div class="counter-row">
-			<span><b id="a-pending">0</b> tags read, not uploaded</span>
-			<button class="btn tonal" id="a-upload"><span class="ms">cloud_upload</span>Upload</button>
-		</div>
-		<div class="card" id="a-summary"></div>
-		<div class="actions">
-			<button class="btn filled" id="a-compare"><span class="ms">compare_arrows</span>Compare</button>
-			<button class="btn tonal" id="a-submit"><span class="ms">send</span>Send for review</button>
-		</div>
-	</div>
+	</aside>
+	<section class="panel work" id="a-summary">
+		<div class="placeholder"><span class="ms">inventory</span><h3>No count running</h3><p>Start today's count on the left.</p></div>
+	</section>
 </section>
 {% endif %}
 </main>
@@ -179,6 +185,6 @@
 		tabs: {{ tabs | tojson }}
 	};
 </script>
-<script src="/assets/rfid_retail/js/rfid_station.js?v=3"></script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=4"></script>
 </body>
 </html>
