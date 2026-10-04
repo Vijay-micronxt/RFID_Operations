@@ -64,7 +64,7 @@
 		back.className = "sheet-back";
 		back.innerHTML = `<div class="sheet"><h3>${esc(title)}</h3>${items
 			.map((it, i) => `<button class="menu-item" data-i="${i}">${icon(it.icon)}<span>${esc(it.label)}</span></button>`)
-			.join("")}</div>`;
+			.join("")}<div class="sheet-foot"><button class="btn ghost">Cancel</button></div></div>`;
 		back.addEventListener("click", (e) => {
 			const btn = e.target.closest("[data-i]");
 			back.remove();
@@ -165,8 +165,7 @@
 			setTimeout(() => $("m-tag").focus(), 0);
 		}
 
-		// More options only when there is something to do (replace a tag, alteration).
-		$("m-more").disabled = !list.some((p) => p.rfid_tag || p.status === "Out for Alteration");
+		$("m-tip").hidden = !list.some((p) => p.rfid_tag);
 
 		$("m-steps").innerHTML = list
 			.map((p, n) => {
@@ -183,7 +182,11 @@
 							: state === "now"
 								? "Waiting for its tag"
 								: "Click to tag this one next";
-				const right = p.rfid_tag ? `<span class="tagchip">${esc(p.rfid_tag)}</span>` : state === "now" ? '<span class="nowchip">NOW</span>' : "";
+				const right = p.rfid_tag || away
+					? `${p.rfid_tag ? `<span class="tagchip">${esc(p.rfid_tag)}</span>` : ""}${icon("more_vert", "muted")}`
+					: state === "now"
+						? '<span class="nowchip">NOW</span>'
+						: "";
 				return `<button class="item ${state}" data-piece="${esc(k)}"><span class="dot">${dot}</span>
 					<span class="grow"><b>${esc(p.role)}</b><small>${sub}</small></span>${right}</button>`;
 			})
@@ -236,10 +239,10 @@
 	$("m-steps").addEventListener("click", (e) => {
 		const row = e.target.closest("[data-piece]");
 		const p = row && pieces(M.unit).find((x) => keyOf(x) === row.dataset.piece);
-		if (p && !p.rfid_tag && p.status !== "Out for Alteration" && M.unit.custom_rfid_status !== "Returned - Hold") {
-			M.current = row.dataset.piece;
-			renderUnit();
-		}
+		if (!p || M.unit.custom_rfid_status === "Returned - Hold") return;
+		if (p.rfid_tag || p.status === "Out for Alteration") return pieceMenu(p);
+		M.current = row.dataset.piece;
+		renderUnit();
 	});
 	$("m-release").addEventListener("click", async () => {
 		M.unit = await call("mapping.release_return", { serial_no: M.unit.name });
@@ -254,35 +257,32 @@
 		loadPending();
 		$("m-code").focus();
 	});
-	$("m-more").addEventListener("click", () => {
-		const u = M.unit;
+	/** Actions for one piece, opened by clicking its row. */
+	function pieceMenu(p) {
 		const items = [];
-		for (const p of pieces(u)) {
-			if (p.rfid_tag)
-				items.push({ icon: "sync", label: `Replace damaged tag - ${p.role}`, run: async () => {
-					const fresh = await ask(`New tag for ${p.role}`, "Scan or type the new tag");
-					if (!fresh) return;
-					M.unit = await call("mapping.replace_tag", { old_epc: p.rfid_tag, new_epc: fresh, reason: "Tag damaged" });
-					snack("Old tag retired, new tag saved");
-					renderUnit();
-				} });
-			if (p.name && p.status === "Tagged")
-				items.push({ icon: "content_cut", label: `Send ${p.role} to alteration`, run: async () => {
-					const who = await ask("Who is altering it?", "Tailor name");
-					if (!who) return;
-					M.unit = await call("mapping.set_alteration", { component: p.name, out: 1, custodian: who });
-					renderUnit();
-				} });
-			if (p.name && p.status === "Out for Alteration")
-				items.push({ icon: "undo", label: `${p.role} is back from alteration`, run: async () => {
-					M.unit = await call("mapping.set_alteration", { component: p.name, out: 0 });
-					pickNext();
-					renderUnit();
-				} });
-		}
-		if (!items.length) return snack("Nothing else to do for this garment");
-		sheet(u.item_name, items);
-	});
+		if (p.rfid_tag)
+			items.push({ icon: "sync", label: "Tag is damaged - put a new tag", run: async () => {
+				const fresh = await ask(`New tag for ${p.role}`, "Scan or type the new tag");
+				if (!fresh) return;
+				M.unit = await call("mapping.replace_tag", { old_epc: p.rfid_tag, new_epc: fresh, reason: "Tag damaged" });
+				snack("Old tag retired, new tag saved");
+				renderUnit();
+			} });
+		if (p.name && p.status === "Tagged")
+			items.push({ icon: "content_cut", label: "Send for alteration", run: async () => {
+				const who = await ask("Who is altering it?", "Tailor name");
+				if (!who) return;
+				M.unit = await call("mapping.set_alteration", { component: p.name, out: 1, custodian: who });
+				renderUnit();
+			} });
+		if (p.name && p.status === "Out for Alteration")
+			items.push({ icon: "undo", label: "Back from alteration", run: async () => {
+				M.unit = await call("mapping.set_alteration", { component: p.name, out: 0 });
+				pickNext();
+				renderUnit();
+			} });
+		if (items.length) sheet(p.rfid_tag ? `${p.role} · tag ${p.rfid_tag}` : p.role, items);
+	}
 
 	// ------------------------------------------------------------ remove tags
 	let released = 0;
