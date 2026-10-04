@@ -367,7 +367,7 @@
 					${g.pieces.length > 1 ? `<div class="pieces">${chips}</div>` : ""}</div>${state}</div>`;
 			})
 			.join("");
-		const unknown = [...seen].filter((t) => !expectedTags.has(t));
+		const unknown = s.unknown || [];
 		const r = s.results || {};
 		const stat = (label, n, cls) => `<div class="stat ${n ? cls : ""}"><b>${n || 0}</b><small>${label}</small></div>`;
 		const compared = Object.keys(r).length > 0;
@@ -390,17 +390,21 @@
 						<a class="btn ghost" href="/app/rfid-audit-session/${encodeURIComponent(s.name)}">${icon("open_in_new", "small")}Open full result to note what happened</a>`
 					: `<div class="explain">${icon("info")}<span>Scan every tag in the store. Each garment below turns green when all its pieces are scanned. When you are done, press <b>Finish count</b>.</span></div>`
 			}
-			<div class="tally">
+			${
+				compared
+					? ""
+					: `<div class="tally">
 				<div><b>${(s.checklist || []).length}</b><small>Garments expected here</small></div>
 				<div><b>${complete}</b><small>Found complete</small></div>
-				<div><b>${seen.size}</b><small>Tags scanned</small></div>
-			</div>
+				<div><b>${seen.size}</b><small>Codes scanned</small></div>
+			</div>`
+			}
 			<h3 class="label">Garments that should be here</h3>
 			<div class="list">${rows || '<div class="empty-row">No RFID garments in this warehouse.</div>'}</div>
 			${
 				unknown.length
 					? `<h3 class="label">Tags that do not belong to any garment here</h3>
-						<div class="list">${unknown.map((t) => `<div class="row"><span class="lead bad">${icon("help", "small")}</span><div class="grow"><b>${esc(t)}</b><small>Unknown, free, or belongs to another place</small></div></div>`).join("")}</div>`
+						<div class="list">${unknown.map((u) => `<div class="row"><span class="lead bad">${icon("help", "small")}</span><div class="grow"><b>${esc(u.code)}</b><small>${esc(u.reason)}</small></div></div>`).join("")}</div>`
 					: ""
 			}`;
 	}

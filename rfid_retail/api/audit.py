@@ -218,7 +218,29 @@ def summary(session, note=None):
 		"observations": len(doc.observations), "uploads": len(doc.uploads), "results": counts,
 		"verified_units": doc.verified_units, "incomplete_sets": doc.incomplete_sets,
 		"movements_after_cutoff": doc.movements_after_cutoff, "note": note,
-		"checklist": _checklist(doc), "observed": [o.epc for o in doc.observations]}
+		"checklist": _checklist(doc), "observed": [o.epc for o in doc.observations], "unknown": _unknown(doc)}
+
+
+def _unknown(doc):
+	"""Scanned codes that match no expected tag, with a plain reason for staff."""
+	expected = {e.tag for e in doc.expected if e.tag}
+	out = []
+	for o in doc.observations:
+		if o.epc in expected:
+			continue
+		res = rfid.resolve_code(o.epc)
+		if res.kind in ("serial", "component"):
+			reason = _("This is a printed label, not an RFID tag. Scan the tag on the garment.")
+		elif res.kind == "unknown":
+			reason = _("This tag is not registered in the system.")
+		elif res.kind == "unmapped":
+			reason = _("Free tag, not on any garment (loose tag lying around?).")
+		elif res.tag_status == rfid.TAG_SOLD:
+			reason = _("Belongs to a sold garment ({0}). Tag not removed, or garment still here?").format(res.serial_no)
+		else:
+			reason = _("Belongs to {0}, which is recorded in another place.").format(res.serial_no)
+		out.append({"code": o.epc, "reason": reason})
+	return out
 
 
 def _checklist(doc):
