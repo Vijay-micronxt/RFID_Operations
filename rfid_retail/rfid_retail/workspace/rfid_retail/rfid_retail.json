@@ -90,7 +90,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Garments",
-   "link_count": 6,
+   "link_count": 7,
    "onboard": 0,
    "type": "Card Break"
   },
@@ -101,6 +101,17 @@
    "label": "Item",
    "link_count": 0,
    "link_to": "Item",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Garment Piece",
+   "link_count": 0,
+   "link_to": "Garment Piece",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -217,7 +228,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-09-30 12:00:00.000000",
+ "modified": "2026-10-04 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Retail",

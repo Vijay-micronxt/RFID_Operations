@@ -1,0 +1,101 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:piece_name",
+ "creation": "2026-10-04 12:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "piece_name",
+  "code",
+  "description"
+ ],
+ "fields": [
+  {
+   "description": "e.g. Jacket, Trouser, Waistcoat, Dupatta",
+   "fieldname": "piece_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Piece Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "description": "Short code used in piece IDs (SUIT-000001-JKT). Fixed once saved, because issued IDs depend on it.",
+   "fieldname": "code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Code",
+   "length": 6,
+   "reqd": 1,
+   "set_only_once": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-04 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RFID Retail",
+ "name": "Garment Piece",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Store Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Stock Operator",
+   "share": 1,
+   "write": 0
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RFID Owner",
+   "share": 1,
+   "write": 0
+  }
+ ],
+ "quick_entry": 1,
+ "search_fields": "code",
+ "show_title_field_in_link": 0,
+ "sort_field": "piece_name",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}

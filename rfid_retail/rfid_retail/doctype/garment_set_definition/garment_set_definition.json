@@ -17,7 +17,7 @@
  ],
  "fields": [
   {
-   "description": "Template or variant. A variant without its own definition uses its template's.",
+   "description": "Template item (its variants share this definition) or a single item without variants. RFID tracked, serial numbered.",
    "fieldname": "item",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -61,7 +61,7 @@
   }
  ],
  "links": [],
- "modified": "2026-09-30 12:00:00.000000",
+ "modified": "2026-10-04 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "Garment Set Definition",

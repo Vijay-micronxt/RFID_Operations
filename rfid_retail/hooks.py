@@ -274,3 +274,11 @@ scheduler_events = {
 		"0 23 * * *": ["rfid_retail.api.audit.flag_missed_audit"],
 	},
 }
+
+override_doctype_dashboards = {
+	"Item": "rfid_retail.dashboards.item",
+	"Serial No": "rfid_retail.dashboards.serial_no",
+	"Sales Invoice": "rfid_retail.dashboards.sales_invoice",
+	"POS Profile": "rfid_retail.dashboards.pos_profile",
+	"Warehouse": "rfid_retail.dashboards.warehouse",
+}
