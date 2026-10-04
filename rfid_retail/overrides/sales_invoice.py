@@ -131,7 +131,7 @@ def on_submit(doc, method=None):
 		for serial_no in get_row_serials(row):
 			_mark_sold(doc, serial_no)
 	if doc.get("custom_rfid_basket"):
-		frappe.db.set_value("RFID Basket", doc.custom_rfid_basket, {"status": "Billed", "sales_invoice": doc.name})
+		frappe.db.set_value("RFID Basket", doc.custom_rfid_basket, {"status": "Billed", "sales_invoice": doc.name, "customer": doc.customer})
 
 
 def _mark_sold(doc, serial_no):
