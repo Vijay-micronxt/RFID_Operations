@@ -152,7 +152,11 @@
 		$("m-bar").style.width = `${(done / list.length) * 100}%`;
 		$("m-progress").textContent = `${done} of ${list.length} piece${list.length > 1 ? "s" : ""} tagged`;
 
+		// A customer return is checked first; tagging only starts after "All pieces checked".
+		const returned = u.custom_rfid_status === "Returned - Hold";
+		if (returned) M.current = null;
 		const current = list.find((p) => keyOf(p) === M.current);
+		$("m-return").hidden = !returned;
 		$("m-now").hidden = !current;
 		$("m-done").hidden = !!current || !ready;
 		if (current) {
@@ -167,7 +171,15 @@
 				const away = p.status === "Out for Alteration";
 				const state = p.rfid_tag ? "done" : k === M.current ? "now" : away ? "away" : "todo";
 				const dot = state === "done" ? icon("check", "small") : state === "away" ? icon("content_cut", "small") : n + 1;
-				const sub = p.rfid_tag ? "Tagged" : away ? "At alteration" : state === "now" ? "Waiting for its tag" : "Click to tag this one next";
+				const sub = p.rfid_tag
+					? "Tagged"
+					: away
+						? "At alteration"
+						: returned
+							? "Check this piece came back"
+							: state === "now"
+								? "Waiting for its tag"
+								: "Click to tag this one next";
 				const right = p.rfid_tag ? `<span class="tagchip">${esc(p.rfid_tag)}</span>` : state === "now" ? '<span class="nowchip">NOW</span>' : "";
 				return `<button class="item ${state}" data-piece="${esc(k)}"><span class="dot">${dot}</span>
 					<span class="grow"><b>${esc(p.role)}</b><small>${sub}</small></span>${right}</button>`;
@@ -181,8 +193,6 @@
 		renderUnit();
 		// On phones the work panel sits below the list.
 		if (window.matchMedia("(max-width: 860px)").matches) $("m-tagging").scrollIntoView({ behavior: "smooth" });
-		if (M.unit.custom_rfid_status === "Returned - Hold")
-			snack("This garment came back from a customer. Check it, then use More options > Return checked.");
 	}
 
 	async function loadPending() {
@@ -194,6 +204,7 @@
 					(r) => `<button class="item" data-open="${esc(r.name)}">
 						<span class="thumb">${icon(r.custom_is_garment_set ? "checkroom" : "apparel")}</span>
 						<span class="grow"><b>${esc(r.item_name)}</b><small>${esc(r.name)}</small></span>
+						${r.custom_rfid_status === "Returned - Hold" ? '<span class="chip-s ret">Returned</span>' : '<span class="chip-s">New</span>'}
 						${icon("chevron_right", "muted")}</button>`
 				)
 				.join("") || `<div class="empty-row">Nothing waiting. New stock appears here after a purchase receipt.</div>`;
@@ -222,10 +233,17 @@
 	$("m-steps").addEventListener("click", (e) => {
 		const row = e.target.closest("[data-piece]");
 		const p = row && pieces(M.unit).find((x) => keyOf(x) === row.dataset.piece);
-		if (p && !p.rfid_tag && p.status !== "Out for Alteration") {
+		if (p && !p.rfid_tag && p.status !== "Out for Alteration" && M.unit.custom_rfid_status !== "Returned - Hold") {
 			M.current = row.dataset.piece;
 			renderUnit();
 		}
+	});
+	$("m-release").addEventListener("click", async () => {
+		M.unit = await call("mapping.release_return", { serial_no: M.unit.name });
+		snack("Return accepted. Now tag the pieces again.");
+		pickNext();
+		renderUnit();
+		loadPending();
 	});
 	$("m-next").addEventListener("click", () => {
 		M.unit = null;
@@ -236,12 +254,6 @@
 	$("m-more").addEventListener("click", () => {
 		const u = M.unit;
 		const items = [];
-		if (u.custom_rfid_status === "Returned - Hold")
-			items.push({ icon: "assignment_turned_in", label: "Return checked - tag again", run: async () => {
-				M.unit = await call("mapping.release_return", { serial_no: u.name });
-				pickNext();
-				renderUnit();
-			} });
 		for (const p of pieces(u)) {
 			if (p.rfid_tag)
 				items.push({ icon: "sync", label: `Replace damaged tag - ${p.role}`, run: async () => {

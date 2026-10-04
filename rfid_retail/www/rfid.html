@@ -8,7 +8,7 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
-	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=4">
+	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=5">
 </head>
 <body>
 {% set labels = {"mapping": ["sell", "Tag garments"], "detach": ["content_cut", "Remove tags"], "gate": ["door_open", "Exit gate"], "audit": ["inventory", "Stock count"]} %}
@@ -82,6 +82,12 @@
 				<p class="piece" id="m-piece"></p>
 				<input id="m-tag" class="field-lg" autocomplete="off" placeholder="Tag number, e.g. TAG-0001">
 				<p class="muted small">Press Enter after typing. The next piece is selected automatically.</p>
+			</div>
+			<div class="callout warn" id="m-return" hidden>
+				<span class="ms">assignment_return</span>
+				<p class="piece">Customer return</p>
+				<p class="muted">Before this garment goes back on sale, check that every piece listed below came back and is in good condition.</p>
+				<button class="btn primary" id="m-release"><span class="ms">task_alt</span>All pieces checked - tag again</button>
 			</div>
 			<div class="callout ok" id="m-done" hidden>
 				<span class="ms">check_circle</span>
@@ -185,6 +191,6 @@
 		tabs: {{ tabs | tojson }}
 	};
 </script>
-<script src="/assets/rfid_retail/js/rfid_station.js?v=4"></script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=5"></script>
 </body>
 </html>

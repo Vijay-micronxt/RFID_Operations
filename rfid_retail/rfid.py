@@ -165,6 +165,8 @@ def assign_tag(epc, serial_no, component=None, device=None, remarks=None):
 	sn = serial_info(serial_no)
 	if sn.custom_rfid_status == SOLD:
 		frappe.throw(_("{0} is already sold.").format(serial_no))
+	if sn.custom_rfid_status == RETURNED:
+		frappe.throw(_("{0} is a customer return. Check its pieces and accept the return before tagging.").format(serial_no))
 
 	role = None
 	if cint(sn.custom_is_garment_set):
