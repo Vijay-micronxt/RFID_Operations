@@ -358,6 +358,7 @@
 					: `<div class="placeholder"><span class="ms">barcode_reader</span><h3>Counting</h3><p>Scan each area, upload, then press Compare.</p></div>`
 			}`;
 		$("a-submit").disabled = !["Comparison Ready", "Investigation Pending"].includes(s.status);
+		$("a-discard").hidden = ["Submitted for Review", "Reviewed"].includes(s.status);
 	}
 
 	onOpen.audit = async () => {
@@ -396,6 +397,18 @@
 		renderAudit(s);
 	});
 	$("a-compare").addEventListener("click", async () => renderAudit(await call("audit.compare", { session: A.session })));
+	$("a-discard").addEventListener("click", async () => {
+		if (!confirm("Discard this count? Scanned reads in it are thrown away.")) return;
+		await call("audit.discard", { session: A.session });
+		A.session = null;
+		A.reads.clear();
+		store.set(null);
+		$("a-pending").textContent = 0;
+		$("a-run").hidden = true;
+		$("a-start").hidden = false;
+		$("a-summary").innerHTML = '<div class="placeholder"><span class="ms">inventory</span><h3>No count running</h3><p>Start today\'s count on the left.</p></div>';
+		snack("Count discarded");
+	});
 	$("a-submit").addEventListener("click", async () => {
 		renderAudit(await call("audit.submit_for_review", { session: A.session }));
 		snack("Sent to the manager for review");

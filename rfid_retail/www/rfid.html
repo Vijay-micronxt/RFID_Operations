@@ -8,7 +8,7 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
-	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=7">
+	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=8">
 </head>
 <body>
 {% set labels = {"mapping": ["sell", "Tag garments"], "detach": ["content_cut", "Remove tags"], "gate": ["door_open", "Exit gate"], "audit": ["inventory", "Stock count"]} %}
@@ -156,24 +156,24 @@
 			<button class="btn primary wide" id="a-begin"><span class="ms">play_arrow</span>Start today's count</button>
 		</div>
 		<div id="a-run" hidden>
-			<label class="field">Area being counted</label>
+			<p class="step"><b>1</b> Choose the area you are counting</p>
 			<div class="chips" id="a-areas">
 				{% for area in ["Sales Floor", "Stockroom", "Trial Rooms", "Returns/Hold", "Alteration"] %}
 				<button class="chip {{ 'on' if loop.first else '' }}" data-area="{{ area }}">{{ area }}</button>
 				{% endfor %}
 			</div>
+			<p class="step"><b>2</b> Scan every tag in that area (Enter after each)</p>
 			<div class="scan">
 				<span class="ms">barcode_reader</span>
 				<input id="a-scan" autocomplete="off" placeholder="Scan or type tag">
 			</div>
-			<div class="pending-row">
-				<span><b id="a-pending">0</b> read, not uploaded</span>
-				<button class="btn ghost" id="a-upload"><span class="ms">cloud_upload</span>Upload</button>
-			</div>
-			<div class="buttons">
-				<button class="btn ghost" id="a-submit"><span class="ms">send</span>Send for review</button>
-				<button class="btn primary" id="a-compare"><span class="ms">compare_arrows</span>Compare</button>
-			</div>
+			<p class="step"><b>3</b> Upload what you scanned <span class="muted">(<span id="a-pending">0</span> waiting)</span></p>
+			<button class="btn ghost wide" id="a-upload"><span class="ms">cloud_upload</span>Upload</button>
+			<p class="step"><b>4</b> When all areas are done, compare</p>
+			<button class="btn primary wide" id="a-compare"><span class="ms">compare_arrows</span>Compare with stock</button>
+			<p class="step"><b>5</b> Send the result to the manager</p>
+			<button class="btn ghost wide" id="a-submit"><span class="ms">send</span>Send for review</button>
+			<button class="btn text wide" id="a-discard"><span class="ms">delete</span>Discard this count</button>
 		</div>
 	</aside>
 	<section class="panel work" id="a-summary">
@@ -191,6 +191,6 @@
 		tabs: {{ tabs | tojson }}
 	};
 </script>
-<script src="/assets/rfid_retail/js/rfid_station.js?v=7"></script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=8"></script>
 </body>
 </html>

@@ -166,6 +166,17 @@ def compare(session):
 
 
 @frappe.whitelist(methods=["POST"])
+def discard(session):
+	"""Throw away a count started by mistake (wrong warehouse, test). Reviewed counts are kept."""
+	require_station("Stock Audit")
+	doc = frappe.get_doc("RFID Audit Session", session)
+	if doc.status in ("Submitted for Review", "Reviewed"):
+		frappe.throw(_("{0} is {1} and is kept as a record.").format(doc.name, doc.status))
+	frappe.delete_doc("RFID Audit Session", doc.name, ignore_permissions=True)
+	return "ok"
+
+
+@frappe.whitelist(methods=["POST"])
 def submit_for_review(session):
 	require_station("Stock Audit")
 	doc = frappe.get_doc("RFID Audit Session", session)

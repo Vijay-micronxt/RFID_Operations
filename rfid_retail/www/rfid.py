@@ -35,9 +35,10 @@ def get_context(context):
 	if context.pos_url is None and "counter" in context.tabs:
 		context.tabs.remove("counter")
 	context.devices = frappe.get_all("RFID Device", {"is_active": 1}, ["name", "device_type", "pos_profile", "warehouse"])
-	# Warehouses with RFID devices first, so the handheld's own floor is the default count.
-	device_wh = {d.warehouse for d in context.devices if d.warehouse}
+	# Warehouses holding RFID stock first (most units on top), so the count defaults to the real floor.
+	rfid_units = dict(frappe.db.sql("""select warehouse, count(*) from `tabSerial No`
+		where status='Active' and ifnull(custom_rfid_status, '') != '' group by warehouse"""))
 	context.warehouses = sorted(
 		frappe.get_all("Warehouse", {"is_group": 0, "company": context.company}, pluck="name"),
-		key=lambda w: (w not in device_wh, w))
+		key=lambda w: (-rfid_units.get(w, 0), w))
 	return context

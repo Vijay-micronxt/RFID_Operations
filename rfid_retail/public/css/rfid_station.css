@@ -221,3 +221,6 @@ button.item:hover { background: var(--gray-50); }
 /* keep the main action visible at the bottom of a long work panel */
 .work .buttons { position: sticky; bottom: -20px; margin: auto -24px -20px; padding: 12px 24px 20px; background: #fff; border-top: 1px solid var(--gray-100); }
 @media (max-width: 860px) { .work .buttons { position: static; margin: 0; padding: 0; border: 0; } }
+.step { display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--gray-700); margin-top: 4px; }
+.step > b { width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+#a-discard { color: var(--red); }
