@@ -165,6 +165,9 @@
 			setTimeout(() => $("m-tag").focus(), 0);
 		}
 
+		// More options only when there is something to do (replace a tag, alteration).
+		$("m-more").disabled = !list.some((p) => p.rfid_tag || p.status === "Out for Alteration");
+
 		$("m-steps").innerHTML = list
 			.map((p, n) => {
 				const k = keyOf(p);
@@ -204,7 +207,7 @@
 					(r) => `<button class="item" data-open="${esc(r.name)}">
 						<span class="thumb">${icon(r.custom_is_garment_set ? "checkroom" : "apparel")}</span>
 						<span class="grow"><b>${esc(r.item_name)}</b><small>${esc(r.name)}</small></span>
-						${r.custom_rfid_status === "Returned - Hold" ? '<span class="chip-s ret">Returned</span>' : '<span class="chip-s">New</span>'}
+						${r.custom_rfid_status === "Returned - Hold" ? '<span class="chip-s ret">Returned</span>' : r.retag ? '<span class="chip-s ret">Re-tag</span>' : '<span class="chip-s">New</span>'}
 						${icon("chevron_right", "muted")}</button>`
 				)
 				.join("") || `<div class="empty-row">Nothing waiting. New stock appears here after a purchase receipt.</div>`;

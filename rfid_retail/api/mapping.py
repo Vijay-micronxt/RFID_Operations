@@ -17,9 +17,15 @@ def pending_units(item_code=None, warehouse=None, limit=100):
 		filters["item_code"] = item_code
 	if warehouse:
 		filters["warehouse"] = warehouse
-	return frappe.get_all("Serial No", filters=filters,
+	rows = frappe.get_all("Serial No", filters=filters,
 		fields=["name", "item_code", "item_name", "warehouse", "custom_rfid_status", "custom_is_garment_set"],
 		order_by="creation asc", limit=cint(limit))
+	# Units that carried tags before (sold and returned) need re-tagging, not first tagging.
+	tagged_before = set(frappe.get_all("RFID Tag Assignment",
+		{"serial_no": ["in", [r.name for r in rows] or [""]]}, pluck="serial_no", distinct=True))
+	for r in rows:
+		r.retag = r.name in tagged_before
+	return rows
 
 
 @frappe.whitelist()
