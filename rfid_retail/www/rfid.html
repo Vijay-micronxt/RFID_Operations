@@ -3,12 +3,12 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-	<meta name="theme-color" content="#3949ab">
+	<meta name="theme-color" content="#1a73e8">
 	<title>RFID Stations</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
-	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=2">
+	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=3">
 </head>
 <body>
 <header class="appbar">
@@ -66,16 +66,46 @@
 
 <!-- ================================================================ TAG GARMENTS -->
 <section class="screen" data-screen="mapping" data-title="Tag garments">
-	<div class="scanbar">
-		<span class="ms">qr_code_scanner</span>
-		<input id="m-scan" autocomplete="off" placeholder="Scan the garment label">
+	<!-- 1. choose the garment -->
+	<div id="m-pick">
+		<div class="prompt">
+			<span class="ms prompt-icon">qr_code_scanner</span>
+			<div class="prompt-label">Step 1</div>
+			<div class="prompt-title">Scan the garment label</div>
+			<input id="m-code" class="big-input" autocomplete="off" placeholder="e.g. SUIT-000001">
+		</div>
+		<div class="subheader">Waiting for tags <span class="count" id="m-count">0</span></div>
+		<div class="list" id="m-pending"></div>
 	</div>
-	<p class="hint" id="m-hint">Scan a serial number or piece label to start.</p>
 
-	<div id="m-unit"></div>
+	<!-- 2. tag its pieces one by one -->
+	<div id="m-tagging" hidden>
+		<div class="garment">
+			<div class="garment-name" id="m-name"></div>
+			<div class="garment-meta" id="m-meta"></div>
+			<div class="progress"><span id="m-bar"></span></div>
+			<div class="garment-meta" id="m-progress"></div>
+		</div>
 
-	<h3 class="section">Waiting for tags <span class="badge" id="m-count">0</span></h3>
-	<div class="list" id="m-pending"></div>
+		<div class="prompt now" id="m-now">
+			<div class="prompt-label">Now scan the tag for</div>
+			<div class="prompt-title big" id="m-piece"></div>
+			<input id="m-tag" class="big-input" autocomplete="off" placeholder="Tag number, e.g. TAG-0001">
+		</div>
+		<div class="prompt done" id="m-done" hidden>
+			<span class="ms prompt-icon">check_circle</span>
+			<div class="prompt-title">Ready to sell</div>
+			<div class="prompt-label">Every piece has its tag</div>
+		</div>
+
+		<div class="subheader">Pieces</div>
+		<div class="list" id="m-steps"></div>
+
+		<div class="bottom-bar">
+			<button class="btn outlined" id="m-more"><span class="ms">more_horiz</span>More options</button>
+			<button class="btn filled" id="m-next"><span class="ms">arrow_forward</span>Next garment</button>
+		</div>
+	</div>
 </section>
 
 <!-- ================================================================ REMOVE TAGS -->
@@ -149,6 +179,6 @@
 		tabs: {{ tabs | tojson }}
 	};
 </script>
-<script src="/assets/rfid_retail/js/rfid_station.js?v=2"></script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=3"></script>
 </body>
 </html>
