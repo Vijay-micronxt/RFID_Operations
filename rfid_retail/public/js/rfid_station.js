@@ -320,7 +320,8 @@
 	});
 
 	// ------------------------------------------------------------ stock count
-	const A = { session: null, area: "Sales Floor", reads: new Set() };
+	// Every scan is uploaded at once; the right panel is a live checklist of what should be in the store.
+	const A = { session: null, area: "Sales Floor" };
 	const store = {
 		get: () => {
 			try {
@@ -341,73 +342,117 @@
 		store.set({ session: s.name, day: new Date().toDateString() });
 		$("a-start").hidden = true;
 		$("a-run").hidden = false;
-		const r = s.results || {};
-		const stat = (label, n, cls) => `<div class="stat ${n ? cls : ""}"><b>${n || 0}</b><small>${label}</small></div>`;
-		$("a-summary").innerHTML = `<div class="work-head"><div><h2>${esc(s.name)}</h2>
-				<p class="muted">${esc(s.warehouse)} · ${s.expected_units} units expected · ${s.observations} tags received</p></div>
-				<span class="badge">${esc(s.status)}</span></div>
-			${s.note ? `<p class="muted">${esc(s.note)}</p>` : ""}
-			${
-				Object.keys(r).length
-					? `<div class="stats">${stat("Found", r.Matched, "ok")}${stat("Not found yet", r.Unverified, "bad")}${stat(
-							"Sets missing a piece",
-							r["Incomplete Set"],
-							"warn"
-						)}${stat("Unknown or extra tags", (r.Unexpected || 0) + (r.Unmapped || 0), "warn")}</div>
-						<a class="btn ghost" href="/app/rfid-audit-session/${encodeURIComponent(s.name)}">${icon("open_in_new", "small")}Open full result</a>`
-					: `<div class="placeholder"><span class="ms">barcode_reader</span><h3>Counting</h3><p>Scan each area, upload, then press Compare.</p></div>`
-			}`;
 		$("a-submit").disabled = !["Comparison Ready", "Investigation Pending"].includes(s.status);
 		$("a-discard").hidden = ["Submitted for Review", "Reviewed"].includes(s.status);
+
+		const seen = new Set(s.observed || []);
+		const expectedTags = new Set();
+		let complete = 0;
+		const rows = (s.checklist || [])
+			.map((g) => {
+				g.pieces.forEach((p) => p.tag && expectedTags.add(p.tag));
+				const found = g.pieces.filter((p) => seen.has(p.tag)).length;
+				if (found === g.pieces.length) complete++;
+				const state =
+					found === g.pieces.length
+						? '<span class="gstate ok">All found</span>'
+						: found
+							? `<span class="gstate part">${found} of ${g.pieces.length} found</span>`
+							: '<span class="gstate no">Not scanned yet</span>';
+				const chips = g.pieces
+					.map((p) => `<span class="pc ${seen.has(p.tag) ? "found" : ""}">${seen.has(p.tag) ? "✓ " : ""}${esc(p.role)}</span>`)
+					.join("");
+				return `<div class="row"><span class="thumb">${icon(g.pieces.length > 1 ? "checkroom" : "apparel")}</span>
+					<div class="grow"><b>${esc(g.item_name)}</b><small>${esc(g.serial_no)}</small>
+					${g.pieces.length > 1 ? `<div class="pieces">${chips}</div>` : ""}</div>${state}</div>`;
+			})
+			.join("");
+		const unknown = [...seen].filter((t) => !expectedTags.has(t));
+		const r = s.results || {};
+		const stat = (label, n, cls) => `<div class="stat ${n ? cls : ""}"><b>${n || 0}</b><small>${label}</small></div>`;
+		const compared = Object.keys(r).length > 0;
+
+		$("a-summary").innerHTML = `
+			<div class="work-head"><div><h2>Stock check · ${esc(s.warehouse)}</h2>
+				<p class="muted">${esc(s.name)} · started ${esc(String(s.cutoff || "").slice(11, 16))}</p></div>
+				<span class="badge">${esc(s.status)}</span></div>
+			${
+				compared
+					? `<h3 class="label">Result</h3><div class="stats">${stat("Garments found complete", r.Matched, "ok")}${stat(
+							"Not found",
+							r.Unverified,
+							"bad"
+						)}${stat("Sets missing a piece", r["Incomplete Set"], "warn")}${stat(
+							"Unknown or extra tags",
+							(r.Unexpected || 0) + (r.Unmapped || 0),
+							"warn"
+						)}</div>
+						<a class="btn ghost" href="/app/rfid-audit-session/${encodeURIComponent(s.name)}">${icon("open_in_new", "small")}Open full result to note what happened</a>`
+					: `<div class="explain">${icon("info")}<span>Scan every tag in the store. Each garment below turns green when all its pieces are scanned. When you are done, press <b>Finish count</b>.</span></div>`
+			}
+			<div class="tally">
+				<div><b>${(s.checklist || []).length}</b><small>Garments expected here</small></div>
+				<div><b>${complete}</b><small>Found complete</small></div>
+				<div><b>${seen.size}</b><small>Tags scanned</small></div>
+			</div>
+			<h3 class="label">Garments that should be here</h3>
+			<div class="list">${rows || '<div class="empty-row">No RFID garments in this warehouse.</div>'}</div>
+			${
+				unknown.length
+					? `<h3 class="label">Tags that do not belong to any garment here</h3>
+						<div class="list">${unknown.map((t) => `<div class="row"><span class="lead bad">${icon("help", "small")}</span><div class="grow"><b>${esc(t)}</b><small>Unknown, free, or belongs to another place</small></div></div>`).join("")}</div>`
+					: ""
+			}`;
+	}
+
+	function resetAudit() {
+		A.session = null;
+		store.set(null);
+		$("a-run").hidden = true;
+		$("a-start").hidden = false;
+		show();
 	}
 
 	onOpen.audit = async () => {
 		const saved = store.get();
 		if (!A.session && saved && saved.day === new Date().toDateString()) {
 			const s = await call("audit.summary", { session: saved.session }, false).catch(() => null);
-			if (s && !["Submitted for Review", "Reviewed"].includes(s.status)) renderAudit(s);
+			if (s && s.status !== "Reviewed") renderAudit(s);
 		}
 	};
 
 	$("a-begin").addEventListener("click", async () => {
 		renderAudit(await call("audit.start", { warehouse: $("a-wh").value, device: $("a-device").value || null }));
+		$("a-scan").focus();
 	});
 	$("a-areas").addEventListener("click", (e) => {
 		const chip = e.target.closest("[data-area]");
 		if (!chip) return;
 		document.querySelectorAll("#a-areas .chip").forEach((c) => c.classList.toggle("on", c === chip));
 		A.area = chip.dataset.area;
+		$("a-scan").focus();
 	});
 	onScan($("a-scan"), async (codes) => {
-		codes.forEach((c) => A.reads.add(c.toUpperCase()));
-		$("a-pending").textContent = A.reads.size;
+		renderAudit(
+			await call("audit.upload", {
+				session: A.session,
+				batch_id: `${$("a-device").value || "HH"}-${Date.now()}`,
+				codes,
+				area: A.area,
+				device: $("a-device").value || null,
+			})
+		);
 	});
-	$("a-upload").addEventListener("click", async () => {
-		if (!A.reads.size) return snack("Scan some tags first", true);
-		const s = await call("audit.upload", {
-			session: A.session,
-			batch_id: `${$("a-device").value || "HH"}-${Date.now()}`,
-			codes: [...A.reads],
-			area: A.area,
-			device: $("a-device").value || null,
-		});
-		A.reads.clear();
-		$("a-pending").textContent = 0;
-		snack("Uploaded");
-		renderAudit(s);
+	$("a-compare").addEventListener("click", async () => {
+		renderAudit(await call("audit.compare", { session: A.session }));
+		snack("Count finished. Check the result on the right.");
 	});
-	$("a-compare").addEventListener("click", async () => renderAudit(await call("audit.compare", { session: A.session })));
 	$("a-discard").addEventListener("click", async () => {
-		if (!confirm("Discard this count? Scanned reads in it are thrown away.")) return;
+		if (!confirm("Discard this count? Its scans are thrown away.")) return;
 		await call("audit.discard", { session: A.session });
-		A.session = null;
-		A.reads.clear();
-		store.set(null);
-		$("a-pending").textContent = 0;
-		$("a-run").hidden = true;
-		$("a-start").hidden = false;
-		$("a-summary").innerHTML = '<div class="placeholder"><span class="ms">inventory</span><h3>No count running</h3><p>Start today\'s count on the left.</p></div>';
 		snack("Count discarded");
+		resetAudit();
+		$("a-summary").innerHTML = '<div class="placeholder"><span class="ms">inventory</span><h3>Daily stock check</h3><p>Pick the warehouse on the left and press Start.</p></div>';
 	});
 	$("a-submit").addEventListener("click", async () => {
 		renderAudit(await call("audit.submit_for_review", { session: A.session }));

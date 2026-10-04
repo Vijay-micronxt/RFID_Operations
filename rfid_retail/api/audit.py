@@ -217,7 +217,22 @@ def summary(session, note=None):
 		"expected_units": doc.expected_units, "expected_identities": len(doc.expected),
 		"observations": len(doc.observations), "uploads": len(doc.uploads), "results": counts,
 		"verified_units": doc.verified_units, "incomplete_sets": doc.incomplete_sets,
-		"movements_after_cutoff": doc.movements_after_cutoff, "note": note}
+		"movements_after_cutoff": doc.movements_after_cutoff, "note": note,
+		"checklist": _checklist(doc), "observed": [o.epc for o in doc.observations]}
+
+
+def _checklist(doc):
+	"""Expected garments with their pieces and tags, for the live checklist on the count screen."""
+	names = {}
+	garments = {}
+	for e in doc.expected:
+		if e.serial_no not in garments:
+			if e.item_code not in names:
+				names[e.item_code] = frappe.get_cached_value("Item", e.item_code, "item_name")
+			garments[e.serial_no] = {"serial_no": e.serial_no, "item_name": names[e.item_code], "pieces": []}
+		role = frappe.db.get_value("Garment Component", e.component, "role") if e.component else None
+		garments[e.serial_no]["pieces"].append({"role": role or names[e.item_code], "tag": e.tag})
+	return list(garments.values())
 
 
 def flag_missed_audit():

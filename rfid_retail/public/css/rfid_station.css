@@ -224,3 +224,15 @@ button.item:hover { background: var(--gray-50); }
 .step { display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--gray-700); margin-top: 4px; }
 .step > b { width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 #a-discard { color: var(--red); }
+.explain { background: var(--blue-50); border: 1px solid var(--blue-100); color: var(--gray-700); border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; }
+.explain .ms { color: var(--blue); }
+.tally { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tally div { border: 1px solid var(--gray-200); border-radius: 10px; padding: 12px; }
+.tally b { display: block; font-size: 24px; font-weight: 700; }
+.tally small { color: var(--gray-500); }
+.pieces { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pc { font-size: 12px; font-weight: 500; padding: 3px 9px; border-radius: 999px; background: var(--gray-100); color: var(--gray-500); }
+.pc.found { background: var(--green-100); color: var(--green); }
+.gstate { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.gstate.ok { color: var(--green); } .gstate.part { color: var(--amber); } .gstate.no { color: var(--gray-500); }
+.placeholder p { max-width: 460px; margin: 0 auto; }

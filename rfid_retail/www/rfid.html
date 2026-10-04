@@ -8,7 +8,7 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
-	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=8">
+	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=9">
 </head>
 <body>
 {% set labels = {"mapping": ["sell", "Tag garments"], "detach": ["content_cut", "Remove tags"], "gate": ["door_open", "Exit gate"], "audit": ["inventory", "Stock count"]} %}
@@ -156,28 +156,30 @@
 			<button class="btn primary wide" id="a-begin"><span class="ms">play_arrow</span>Start today's count</button>
 		</div>
 		<div id="a-run" hidden>
-			<p class="step"><b>1</b> Choose the area you are counting</p>
+			<p class="step"><b>1</b> Choose the area you are in</p>
 			<div class="chips" id="a-areas">
 				{% for area in ["Sales Floor", "Stockroom", "Trial Rooms", "Returns/Hold", "Alteration"] %}
 				<button class="chip {{ 'on' if loop.first else '' }}" data-area="{{ area }}">{{ area }}</button>
 				{% endfor %}
 			</div>
-			<p class="step"><b>2</b> Scan every tag in that area (Enter after each)</p>
+			<p class="step"><b>2</b> Scan every tag you see (Enter after each)</p>
 			<div class="scan">
 				<span class="ms">barcode_reader</span>
 				<input id="a-scan" autocomplete="off" placeholder="Scan or type tag">
 			</div>
-			<p class="step"><b>3</b> Upload what you scanned <span class="muted">(<span id="a-pending">0</span> waiting)</span></p>
-			<button class="btn ghost wide" id="a-upload"><span class="ms">cloud_upload</span>Upload</button>
-			<p class="step"><b>4</b> When all areas are done, compare</p>
-			<button class="btn primary wide" id="a-compare"><span class="ms">compare_arrows</span>Compare with stock</button>
-			<p class="step"><b>5</b> Send the result to the manager</p>
+			<p class="muted small">Each scan is saved straight away and ticks the piece on the right.</p>
+			<p class="step"><b>3</b> All areas done? Finish the count</p>
+			<button class="btn primary wide" id="a-compare"><span class="ms">fact_check</span>Finish count &amp; show result</button>
+			<p class="step"><b>4</b> Send the result to the manager</p>
 			<button class="btn ghost wide" id="a-submit"><span class="ms">send</span>Send for review</button>
 			<button class="btn text wide" id="a-discard"><span class="ms">delete</span>Discard this count</button>
 		</div>
 	</aside>
 	<section class="panel work" id="a-summary">
-		<div class="placeholder"><span class="ms">inventory</span><h3>No count running</h3><p>Start today's count on the left.</p></div>
+		<div class="placeholder"><span class="ms">inventory</span><h3>Daily stock check</h3>
+			<p>Walk the store with the handheld and scan every tag. The system ticks off each garment that should be here
+			and shows what is missing or unexpected. Nothing in stock changes.</p>
+			<p class="muted small" style="margin-top:8px">Pick the warehouse on the left and press Start.</p></div>
 	</section>
 </section>
 {% endif %}
@@ -191,6 +193,6 @@
 		tabs: {{ tabs | tojson }}
 	};
 </script>
-<script src="/assets/rfid_retail/js/rfid_station.js?v=8"></script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=9"></script>
 </body>
 </html>
