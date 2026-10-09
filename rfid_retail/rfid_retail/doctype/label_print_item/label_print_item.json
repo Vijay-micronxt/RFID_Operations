@@ -1,0 +1,91 @@
+{
+ "actions": [],
+ "creation": "2026-10-09 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "istable": 1,
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "label": "Item",
+   "options": "Item",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name",
+   "read_only": 0
+  },
+  {
+   "columns": 2,
+   "fieldname": "serial_no",
+   "fieldtype": "Link",
+   "label": "Serial No",
+   "options": "Serial No",
+   "in_list_view": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "component",
+   "fieldtype": "Link",
+   "label": "Set Piece",
+   "options": "Garment Component",
+   "in_list_view": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "details",
+   "fieldtype": "Data",
+   "label": "Details",
+   "in_list_view": 1,
+   "description": "Size, colour etc. printed under the name"
+  },
+  {
+   "columns": 2,
+   "fieldname": "barcode",
+   "fieldtype": "Data",
+   "label": "Barcode",
+   "in_list_view": 1,
+   "description": "Blank = serial, set piece or item barcode"
+  },
+  {
+   "columns": 1,
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "label": "Price",
+   "in_list_view": 1
+  },
+  {
+   "columns": 1,
+   "default": "1",
+   "fieldname": "copies",
+   "fieldtype": "Int",
+   "label": "Copies",
+   "in_list_view": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-09 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RFID Retail",
+ "name": "Label Print Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "field_order": [
+  "item_code",
+  "item_name",
+  "serial_no",
+  "component",
+  "details",
+  "barcode",
+  "rate",
+  "copies"
+ ]
+}

@@ -77,6 +77,35 @@ installed it adds an RFID tray to the POS Next sale screen.
   The Billing tile opens POS Next.
 - RFID sections on the Item, Serial No, Sales Invoice, POS Profile and Warehouse dashboards.
 
+**Item codes** (`RFID Settings > Item Codes`, own switch, works with RFID off)
+- Build item codes and names from patterns, e.g. `{supplier_code}-{item_name}` and
+  `{template}-{attr_abbrs}` for variants: `ZOD-FORMAL-SHIRT-RED-40`, "Formal Shirt Red 40".
+- Tokens: `{supplier_code}` `{supplier}` `{item_name}` `{item_group}` `{brand}` `{style_code}`
+  `{template}` `{template_name}` `{attr_abbrs}` `{attr_values}` `{attr:Colour}` `{value:Colour}`
+  `{###}` (running number per prefix). An empty token drops with its separator.
+- Supplier comes from the new `Supplier` field on Item (or the first Item Supplier row);
+  its code from `Item Code Prefix` on Supplier, else the first letters of its name.
+- Applies when Item Code is left blank, and to every new variant. A typed code always wins.
+  A code that already exists is rejected as a duplicate.
+
+**Barcodes and labels** (`RFID Settings > Barcodes & Labels`, own switch, works with RFID off)
+- Every new stock item gets a barcode: EAN-13 with check digit (in-store `2x` range or your GS1
+  prefix), a plain number, or the item code. Items that already carry a supplier barcode keep it.
+- `Label Print Job`: one row per label source, with copies. Built from a Purchase Receipt,
+  Purchase Invoice with Update Stock, Stock Entry or Stock Reconciliation (`Print Labels` button),
+  from selected Items or Serial Nos (list action), or from stock on hand in a warehouse.
+  Optionally created automatically whenever stock is received.
+- What a label encodes: a serial-tracked unit prints its Serial No (one label per piece), a set
+  piece prints its component code (`SUIT-000125-JKT`), anything else prints the item barcode,
+  one label per unit. These are the codes the RFID counter accepts as label fallback.
+- `Retail Barcode Label` print format: name, size/colour, barcode, code, price and store name,
+  scaled to any label size (width, height, labels across the roll, gap set in settings).
+
+**Invoice print formats**
+- `Retail Tax Invoice` (A4) and `Retail Receipt` (80 mm thermal) for Sales Invoice.
+- Seller block from the company address, GST tax per HSN from `item_wise_tax_detail` (correct on
+  tax-inclusive POS bills), serial numbers per line, payments, Credit Note title for returns.
+
 **API**
 - Every action above is a whitelisted method, usable by device bridges and custom frontends with
   an API key. See [API.md](API.md).

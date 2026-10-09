@@ -257,7 +257,9 @@ _rfid_invoice_events = {
 	"on_submit": "rfid_retail.overrides.sales_invoice.on_submit",
 	"on_cancel": "rfid_retail.overrides.sales_invoice.on_cancel",
 }
-_inward_events = {"on_submit": "rfid_retail.overrides.stock.on_submit"}
+_inward_events = {
+	"on_submit": ["rfid_retail.overrides.stock.on_submit", "rfid_retail.labels.on_inward_submit"],
+}
 
 doc_events = {
 	"Sales Invoice": _rfid_invoice_events,
@@ -266,6 +268,25 @@ doc_events = {
 	"Purchase Invoice": _inward_events,
 	"Stock Entry": _inward_events,
 	"Stock Reconciliation": _inward_events,
+	# item codes and barcodes: own switches, independent of RFID
+	"Item": {
+		"before_insert": ["rfid_retail.item_codes.before_insert", "rfid_retail.labels.item_before_insert"],
+	},
+}
+
+app_include_js = "/assets/rfid_retail/js/rfid_retail_desk.js"
+doctype_list_js = {
+	"Item": "public/js/item_list.js",
+	"Serial No": "public/js/serial_no_list.js",
+}
+extend_bootinfo = "rfid_retail.boot.extend_bootinfo"
+
+jinja = {
+	"methods": [
+		"rfid_retail.labels.barcode_svg",
+		"rfid_retail.labels.label_context",
+		"rfid_retail.printing.invoice_context",
+	],
 }
 
 scheduler_events = {

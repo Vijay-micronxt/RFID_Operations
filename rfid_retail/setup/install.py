@@ -12,7 +12,19 @@ def after_migrate():
 	make_roles()
 	create_custom_fields(get_custom_fields(), update=True)
 	seed_station_roles()
+	seed_setting_defaults()
 	grant_counter_permissions()
+
+
+def seed_setting_defaults():
+	"""Settings fields added after a site was set up start empty; give them their defaults."""
+	values = frappe.db.get_singles_dict("RFID Settings")
+	for df in frappe.get_meta("RFID Settings").fields:
+		if df.default is None or df.default == "" or df.fieldtype in ("Table", "Section Break", "Column Break", "Tab Break"):
+			continue
+		if values.get(df.fieldname) is None:
+			frappe.db.set_single_value("RFID Settings", df.fieldname, df.default)
+	frappe.clear_document_cache("RFID Settings", "RFID Settings")
 
 
 def seed_station_roles():
@@ -93,6 +105,14 @@ def get_custom_fields():
 				"description": "Every unit gets a serial number and reusable RFID tag(s). Needs Has Serial No."},
 			{"fieldname": "custom_style_code", "fieldtype": "Data", "label": "Style Code",
 				"insert_after": "custom_rfid_tracked", "in_standard_filter": 1},
+			{"fieldname": "custom_supplier", "fieldtype": "Link", "label": "Supplier", "options": "Supplier",
+				"insert_after": "brand", "in_standard_filter": 1,
+				"description": "Main supplier. Used by the item code pattern; variants take it from the template."},
+		],
+		"Supplier": [
+			{"fieldname": "custom_item_code_prefix", "fieldtype": "Data", "label": "Item Code Prefix",
+				"insert_after": "supplier_group", "length": 10,
+				"description": "Short code used in item codes, e.g. RAY. Blank = first letters of the name."},
 		],
 		"Serial No": [
 			{"fieldname": "custom_rfid_section", "fieldtype": "Section Break", "label": "RFID",

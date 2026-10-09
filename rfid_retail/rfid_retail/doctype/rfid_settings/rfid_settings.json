@@ -6,6 +6,7 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "rfid_tab",
   "enabled",
   "sale_section",
   "require_scan_for_sale",
@@ -17,12 +18,49 @@
   "cb1",
   "daily_audit_required",
   "access_section",
-  "station_roles"
+  "station_roles",
+  "item_code_tab",
+  "item_codes_enabled",
+  "item_code_section",
+  "item_code_pattern",
+  "variant_code_pattern",
+  "cb_codes",
+  "item_name_pattern",
+  "variant_name_pattern",
+  "code_format_section",
+  "code_separator",
+  "code_uppercase",
+  "cb_format",
+  "supplier_code_length",
+  "item_name_code_length",
+  "pattern_help",
+  "label_tab",
+  "barcodes_enabled",
+  "barcode_kind",
+  "barcode_prefix",
+  "cb_barcode",
+  "auto_label_job",
+  "component_labels",
+  "label_layout_section",
+  "label_print_format",
+  "label_width_mm",
+  "label_height_mm",
+  "cb_layout",
+  "labels_per_row",
+  "label_gap_mm",
+  "label_price_list",
+  "label_show_price",
+  "label_footer"
  ],
  "fields": [
   {
+   "fieldname": "rfid_tab",
+   "fieldtype": "Tab Break",
+   "label": "RFID"
+  },
+  {
    "default": "0",
-   "description": "Master switch. When off the app changes nothing: no invoice checks, no stations, no scheduled alerts.",
+   "description": "RFID master switch. When off no RFID rule runs: no invoice checks, no stations, no scheduled alerts. Item codes and labels have their own switches on the other tabs.",
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enable RFID"
@@ -92,11 +130,211 @@
    "fieldtype": "Table",
    "label": "Station Roles",
    "options": "RFID Station Role"
+  },
+  {
+   "fieldname": "item_code_tab",
+   "fieldtype": "Tab Break",
+   "label": "Item Codes"
+  },
+  {
+   "default": "0",
+   "fieldname": "item_codes_enabled",
+   "fieldtype": "Check",
+   "label": "Build item codes and names from patterns",
+   "description": "Works with RFID switched off. Applies when an item is created with Item Code left blank, and to every new variant."
+  },
+  {
+   "fieldname": "item_code_section",
+   "fieldtype": "Section Break",
+   "label": "Patterns",
+   "depends_on": "item_codes_enabled"
+  },
+  {
+   "default": "{supplier_code}-{item_name}",
+   "fieldname": "item_code_pattern",
+   "fieldtype": "Data",
+   "label": "Item code",
+   "mandatory_depends_on": "item_codes_enabled"
+  },
+  {
+   "default": "{template}-{attr_abbrs}",
+   "fieldname": "variant_code_pattern",
+   "fieldtype": "Data",
+   "label": "Variant code",
+   "mandatory_depends_on": "item_codes_enabled"
+  },
+  {
+   "fieldname": "cb_codes",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "{item_name}",
+   "fieldname": "item_name_pattern",
+   "fieldtype": "Data",
+   "label": "Item name",
+   "mandatory_depends_on": "item_codes_enabled"
+  },
+  {
+   "default": "{template_name} {attr_values}",
+   "fieldname": "variant_name_pattern",
+   "fieldtype": "Data",
+   "label": "Variant name",
+   "mandatory_depends_on": "item_codes_enabled"
+  },
+  {
+   "fieldname": "code_format_section",
+   "fieldtype": "Section Break",
+   "label": "Code format",
+   "depends_on": "item_codes_enabled"
+  },
+  {
+   "default": "-",
+   "fieldname": "code_separator",
+   "fieldtype": "Data",
+   "label": "Separator between words in a code",
+   "length": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "code_uppercase",
+   "fieldtype": "Check",
+   "label": "Upper-case codes"
+  },
+  {
+   "fieldname": "cb_format",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "3",
+   "fieldname": "supplier_code_length",
+   "fieldtype": "Int",
+   "label": "Supplier code length",
+   "description": "Used when the supplier has no Item Code Prefix: first letters of the supplier name."
+  },
+  {
+   "default": "0",
+   "fieldname": "item_name_code_length",
+   "fieldtype": "Int",
+   "label": "Max letters of item name in a code",
+   "description": "0 = whole name."
+  },
+  {
+   "fieldname": "pattern_help",
+   "fieldtype": "HTML",
+   "label": "Tokens",
+   "depends_on": "item_codes_enabled",
+   "options": "<p class='text-muted small'>Tokens: <code>{supplier_code}</code> <code>{supplier}</code> <code>{item_name}</code> <code>{item_group}</code> <code>{brand}</code> <code>{style_code}</code> <code>{template}</code> <code>{template_name}</code> <code>{attr_abbrs}</code> <code>{attr_values}</code> <code>{attr:Colour}</code> (abbreviation) <code>{value:Colour}</code> (value) <code>{###}</code> (running number per prefix). Empty tokens are dropped together with their separator.</p>"
+  },
+  {
+   "fieldname": "label_tab",
+   "fieldtype": "Tab Break",
+   "label": "Barcodes & Labels"
+  },
+  {
+   "default": "0",
+   "fieldname": "barcodes_enabled",
+   "fieldtype": "Check",
+   "label": "Create a barcode for every new stock item",
+   "description": "Works with RFID switched off. Items that already carry a barcode (e.g. the supplier's) keep it."
+  },
+  {
+   "default": "EAN-13",
+   "depends_on": "barcodes_enabled",
+   "fieldname": "barcode_kind",
+   "fieldtype": "Select",
+   "label": "Barcode type",
+   "options": "EAN-13\nNumeric\nItem Code"
+  },
+  {
+   "default": "2",
+   "depends_on": "eval:doc.barcodes_enabled && doc.barcode_kind!='Item Code'",
+   "fieldname": "barcode_prefix",
+   "fieldtype": "Data",
+   "label": "Barcode prefix",
+   "description": "EAN-13: 2x is the in-store range; use your GS1 company prefix if you have one."
+  },
+  {
+   "fieldname": "cb_barcode",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "auto_label_job",
+   "fieldtype": "Check",
+   "label": "Prepare a Label Print Job when stock is received",
+   "description": "Purchase Receipt, Purchase Invoice with Update Stock, and Stock Entry receipts."
+  },
+  {
+   "default": "0",
+   "fieldname": "component_labels",
+   "fieldtype": "Check",
+   "label": "Also print a label for each set piece",
+   "description": "Garment sets: one durable label per jacket/trouser/etc. so a return can be matched after tags are removed."
+  },
+  {
+   "fieldname": "label_layout_section",
+   "fieldtype": "Section Break",
+   "label": "Label layout"
+  },
+  {
+   "default": "Retail Barcode Label",
+   "fieldname": "label_print_format",
+   "fieldtype": "Link",
+   "label": "Label print format",
+   "options": "Print Format"
+  },
+  {
+   "default": "50",
+   "fieldname": "label_width_mm",
+   "fieldtype": "Float",
+   "label": "Label width (mm)"
+  },
+  {
+   "default": "25",
+   "fieldname": "label_height_mm",
+   "fieldtype": "Float",
+   "label": "Label height (mm)"
+  },
+  {
+   "fieldname": "cb_layout",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "labels_per_row",
+   "fieldtype": "Int",
+   "label": "Labels across the roll"
+  },
+  {
+   "default": "2",
+   "fieldname": "label_gap_mm",
+   "fieldtype": "Float",
+   "label": "Gap between labels (mm)"
+  },
+  {
+   "fieldname": "label_price_list",
+   "fieldtype": "Link",
+   "label": "Price list for label price",
+   "options": "Price List",
+   "description": "Blank = Selling Settings default."
+  },
+  {
+   "default": "1",
+   "fieldname": "label_show_price",
+   "fieldtype": "Check",
+   "label": "Print price"
+  },
+  {
+   "default": "",
+   "fieldname": "label_footer",
+   "fieldtype": "Data",
+   "label": "Footer line",
+   "description": "e.g. store name. Blank = company name."
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-01 12:00:00.000000",
+ "modified": "2026-10-09 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Settings",

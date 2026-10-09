@@ -16,8 +16,25 @@ class RFIDSettings(Document):
 			seen.add(key)
 		if self.device_offline_minutes is not None and self.device_offline_minutes < 1:
 			self.device_offline_minutes = 15
+		self.validate_item_codes()
+		self.validate_labels()
+
+	def validate_item_codes(self):
+		if not self.item_codes_enabled:
+			return
+		if frappe.db.get_default("item_naming_by") == "Naming Series":
+			frappe.throw(_("Stock Settings names items by Naming Series. Set Item Naming By to Item Code to use code patterns."))
+		if len(self.code_separator or "") > 1:
+			frappe.throw(_("Use a single character as the code separator."))
+
+	def validate_labels(self):
+		if self.barcode_kind == "EAN-13" and len("".join(c for c in (self.barcode_prefix or "") if c.isdigit())) > 9:
+			frappe.throw(_("An EAN-13 prefix can have at most 9 digits, so at least 3 remain for the running number."))
+		if (self.label_width_mm or 0) <= 0 or (self.label_height_mm or 0) <= 0:
+			frappe.throw(_("Set the label width and height in mm."))
 
 	def on_update(self):
 		from rfid_retail.setup.install import grant_counter_permissions
 
 		grant_counter_permissions()
+		frappe.clear_cache()  # boot info carries the item code / label switches
