@@ -12,6 +12,10 @@
   "require_scan_for_sale",
   "allow_label_fallback",
   "block_untracked_items",
+  "cb_sale",
+  "tag_release_mode",
+  "inward_section",
+  "require_tags_on_inward",
   "device_section",
   "device_offline_minutes",
   "exit_gate_enabled",
@@ -90,6 +94,30 @@
    "fieldname": "block_untracked_items",
    "fieldtype": "Check",
    "label": "Block stock items that are not RFID tracked"
+  },
+  {
+   "fieldname": "cb_sale",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tag_release_mode",
+   "fieldtype": "Select",
+   "label": "After A Sale",
+   "options": "Free the tag at once\nFree the tag after removal at the detach station",
+   "default": "Free the tag at once",
+   "description": "At once: the tag is reusable as soon as the bill is paid. After removal: it stays linked to the sold garment until it is read at the detach station."
+  },
+  {
+   "fieldname": "inward_section",
+   "fieldtype": "Section Break",
+   "label": "Purchase And Stock In"
+  },
+  {
+   "fieldname": "require_tags_on_inward",
+   "fieldtype": "Check",
+   "label": "Tag Every Unit Before Submitting",
+   "default": "0",
+   "description": "Purchase Invoice / Purchase Receipt / Stock Entry cannot be submitted until every RFID unit on it has a tag. Off: untagged units wait in the Tag garments station."
   },
   {
    "fieldname": "device_section",
@@ -334,7 +362,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-09 12:00:00.000000",
+ "modified": "2026-10-12 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Settings",

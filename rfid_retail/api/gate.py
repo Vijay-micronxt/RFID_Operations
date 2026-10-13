@@ -30,22 +30,25 @@ def gate_read(codes, device=None):
 			# Unknown or free tags (e.g. loose tag storage near the gate) are logged, not alarmed.
 			events.append({"epc": code, "alarm": False, "message": _("Unmapped tag")})
 			continue
-		sn = rfid.serial_info(res.serial_no)
-		if res.tag_status == rfid.TAG_SOLD and sn.custom_rfid_status == rfid.SOLD:
+		sn = rfid.serial_info(res.serial_no) if res.serial_no else frappe._dict(
+			item_name=frappe.get_cached_value("Item", res.item_code, "item_name"), custom_rfid_status=res.tag_status,
+			custom_sales_invoice=None)
+		label = res.component or res.serial_no or res.item_code
+		if res.tag_status == rfid.TAG_SOLD:
+			sold_on = sn.custom_sales_invoice or frappe.db.get_value("RFID Tag Assignment",
+				frappe.db.get_value("RFID Tag", code, "current_assignment"), "sales_invoice")
 			rfid.log_exception("Unconfirmed Detach",
-				_("Paid garment {0} left with tag {1} still attached ({2}).").format(
-					res.component or res.serial_no, code, sn.custom_sales_invoice),
+				_("Paid garment {0} left with tag {1} still attached ({2}).").format(label, code, sold_on),
 				severity="Low", epc=code, serial_no=res.serial_no, component=res.component, device=device)
-			events.append({"epc": code, "alarm": False, "message": _("Paid ({0}) - tag not detached").format(
-				sn.custom_sales_invoice)})
+			events.append({"epc": code, "alarm": False, "message": _("Paid ({0}) - tag not detached").format(sold_on)})
 			continue
 		alarm = True
-		rfid.log_exception("Exit Alert",
-			_("UNPAID {0} ({1}) read at exit. Status: {2}.").format(
-				res.component or res.serial_no, sn.item_name, sn.custom_rfid_status),
-			severity="Critical", epc=code, serial_no=res.serial_no, component=res.component, device=device)
+		msg = _("UNPAID {0} ({1}) read at exit. Status: {2}.").format(label, sn.item_name, sn.custom_rfid_status)
+		rfid.log_exception("Exit Alert", msg, severity="Critical", epc=code, serial_no=res.serial_no,
+			component=res.component, device=device)
+		rfid.log_event(code, "Exit Alert", reason=msg, device=device)
 		events.append({"epc": code, "alarm": True, "serial_no": res.serial_no, "item_name": sn.item_name,
-			"message": _("UNPAID: {0}").format(res.component or res.serial_no)})
+			"message": _("UNPAID: {0}").format(label)})
 	return {"alarm": alarm, "events": events}
 
 

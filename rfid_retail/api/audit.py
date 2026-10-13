@@ -50,7 +50,11 @@ def begin(session):
 			asg = rfid.active_assignment_for(serial_no=sn.name)
 			doc.append("expected", {"serial_no": sn.name, "item_code": sn.item_code,
 				"tag": asg and frappe.db.get_value("RFID Tag Assignment", asg, "tag")})
-	doc.expected_units = len(units)
+	tags = frappe.get_all("RFID Tag", {"warehouse": doc.warehouse, "status": ["in", rfid.IN_STOCK_TAG],
+		"serial_no": ("is", "not set")}, ["name", "item_code"])
+	for t in tags:
+		doc.append("expected", {"item_code": t.item_code, "tag": t.name})
+	doc.expected_units = len(units) + len(tags)
 	doc.status = "In Progress"
 	doc.save(ignore_permissions=True)
 	return summary(doc.name)
@@ -104,11 +108,13 @@ def compare(session):
 
 	by_serial = {}
 	for e in doc.expected:
-		by_serial.setdefault(e.serial_no, []).append(e)
+		# a non-serial unit is known only by its tag
+		by_serial.setdefault(e.serial_no or f"tag:{e.tag}", []).append(e)
 	expected_tags = {e.tag for e in doc.expected if e.tag}
 	verified = incomplete = unverified = 0
 	for serial_no, rows in by_serial.items():
 		item = rows[0].item_code
+		serial_no = rows[0].serial_no
 		if not rows[0].component:
 			if rows[0].tag in observed:
 				verified += 1
@@ -146,12 +152,15 @@ def compare(session):
 		elif res.tag_status == rfid.TAG_SOLD:
 			sold_seen += 1
 			add("Sold but Observed", res.serial_no, res.component, epc, res.item_code,
-				_("Sold on {0}. Tag not detached, or garment still here?").format(
-					frappe.db.get_value("Serial No", res.serial_no, "custom_sales_invoice")))
+				_("Sold on {0}. Tag not detached, or garment still here?").format(_sold_on(res)))
 		else:
 			unexpected += 1
 			add("Unexpected", res.serial_no, res.component, epc, res.item_code,
-				_("Expected in {0}").format(frappe.db.get_value("Serial No", res.serial_no, "warehouse")))
+				_("Expected in {0}").format(res.warehouse))
+
+	for r in rfid.untagged_items(warehouse=doc.warehouse):
+		add("Untagged Stock", item_code=r.item_code,
+			detail=_("{0} in stock, {1} with tags. Tag the rest.").format(cint(r.actual_qty), cint(r.tagged)))
 
 	doc.results = []
 	for r in results:
@@ -202,6 +211,8 @@ def mark_reviewed(session):
 				doc.name, r.classification, r.component or r.serial_no), severity="High",
 				serial_no=r.serial_no, component=r.component, reference_doctype=doc.doctype,
 				reference_name=doc.name)
+		if r.resolution == "Tag Lost" and r.epc and frappe.db.get_value("RFID Tag", r.epc, "status") not in rfid.UNUSABLE:
+			rfid.set_tag_condition(r.epc, rfid.TAG_LOST, _("Not found in stock count {0}").format(doc.name))
 	doc.db_set({"status": "Reviewed", "reviewed_by": frappe.session.user, "reviewed_on": now_datetime()})
 	return summary(doc.name)
 
@@ -221,6 +232,13 @@ def summary(session, note=None):
 		"checklist": _checklist(doc), "observed": [o.epc for o in doc.observations], "unknown": _unknown(doc)}
 
 
+def _sold_on(res):
+	if res.serial_no:
+		return frappe.db.get_value("Serial No", res.serial_no, "custom_sales_invoice")
+	return frappe.db.get_value("RFID Tag Assignment", frappe.db.get_value("RFID Tag", res.code, "current_assignment"),
+		"sales_invoice")
+
+
 def _unknown(doc):
 	"""Scanned codes that match no expected tag, with a plain reason for staff."""
 	expected = {e.tag for e in doc.expected if e.tag}
@@ -233,12 +251,15 @@ def _unknown(doc):
 			reason = _("This is a printed label, not an RFID tag. Scan the tag on the garment.")
 		elif res.kind == "unknown":
 			reason = _("This tag is not registered in the system.")
+		elif res.kind == "unmapped" and res.tag_status in rfid.UNUSABLE:
+			reason = _("This tag was marked {0}. If it is on a garment, mark it found and re-tag.").format(res.tag_status)
 		elif res.kind == "unmapped":
 			reason = _("Free tag, not on any garment (loose tag lying around?).")
 		elif res.tag_status == rfid.TAG_SOLD:
-			reason = _("Belongs to a sold garment ({0}). Tag not removed, or garment still here?").format(res.serial_no)
+			reason = _("Belongs to a sold garment ({0}). Tag not removed, or garment still here?").format(
+				res.serial_no or res.item_code)
 		else:
-			reason = _("Belongs to {0}, which is recorded in another place.").format(res.serial_no)
+			reason = _("Belongs to {0}, which is recorded in {1}.").format(res.serial_no or res.item_code, res.warehouse)
 		out.append({"code": o.epc, "reason": reason})
 	return out
 
@@ -248,12 +269,13 @@ def _checklist(doc):
 	names = {}
 	garments = {}
 	for e in doc.expected:
-		if e.serial_no not in garments:
+		key = e.serial_no or f"tag:{e.tag}"
+		if key not in garments:
 			if e.item_code not in names:
 				names[e.item_code] = frappe.get_cached_value("Item", e.item_code, "item_name")
-			garments[e.serial_no] = {"serial_no": e.serial_no, "item_name": names[e.item_code], "pieces": []}
+			garments[key] = {"serial_no": e.serial_no or e.tag, "item_name": names[e.item_code], "pieces": []}
 		role = frappe.db.get_value("Garment Component", e.component, "role") if e.component else None
-		garments[e.serial_no]["pieces"].append({"role": role or names[e.item_code], "tag": e.tag})
+		garments[key]["pieces"].append({"role": role or names[e.item_code], "tag": e.tag})
 	return list(garments.values())
 
 
