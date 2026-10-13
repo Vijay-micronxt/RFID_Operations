@@ -242,3 +242,35 @@ button.item:hover { background: var(--gray-50); }
 .list { overflow: visible; }
 .list > :first-child { border-top-left-radius: 10px; border-top-right-radius: 10px; }
 .list > :last-child { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
+
+/* bulk tagging */
+.bulk-count { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 6px; }
+.bulk-count > b { font-size: 40px; line-height: 1; color: var(--blue); }
+.bulk-count.full > b { color: var(--green); }
+.bulk-count.over > b { color: var(--red); }
+.warnline.soft { background: var(--amber-50); color: var(--amber); }
+.warnline { margin: 8px 0; padding: 8px 12px; border-radius: 10px; background: var(--red-50); color: var(--red); font-weight: 500; }
+.row .x { border: 0; background: none; color: var(--gray-500); cursor: pointer; padding: 4px; }
+.row .x:hover { color: var(--red); }
+.chip-s.set { background: var(--blue-50); color: var(--blue); }
+
+/* tag history */
+.tagcard { margin-top: 14px; border: 1px solid var(--gray-200); border-radius: 12px; padding: 14px; }
+.tagcard h3 { font-size: 16px; margin-bottom: 2px; }
+.tagcard .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 10px 0; font-size: 13px; }
+.tagcard .kv span:nth-child(odd) { color: var(--gray-500); }
+.tagcard .buttons { flex-wrap: wrap; }
+.timeline { position: relative; margin-left: 12px; border-left: 2px solid var(--gray-200); }
+.ev { position: relative; padding: 0 0 14px 20px; }
+.ev::before { content: ""; position: absolute; left: -7px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--gray-300); border: 2px solid #fff; }
+.ev.good::before { background: var(--green); }
+.ev.sale::before { background: var(--blue); }
+.ev.bad::before { background: var(--red); }
+.ev.warn::before { background: #f59e0b; }
+.ev b { font-weight: 600; }
+.ev .when { color: var(--gray-500); font-size: 12px; }
+.ev .note { font-size: 13px; color: var(--gray-700); }
+.uses { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 18px; }
+.uses th, .uses td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--gray-200); }
+.uses th { color: var(--gray-500); font-weight: 500; }
+@media (max-width: 860px) { .uses { display: block; overflow-x: auto; } }

@@ -64,15 +64,16 @@
    "default": "1",
    "fieldname": "copies",
    "fieldtype": "Int",
-   "label": "Copies",
-   "in_list_view": 1
+   "label": "Qty",
+   "in_list_view": 1,
+   "description": "How many stickers to print"
   }
  ],
  "links": [],
  "modified": "2026-10-09 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
- "name": "Label Print Item",
+ "name": "Sticker Print Job Item",
  "owner": "Administrator",
  "permissions": [],
  "sort_field": "modified",

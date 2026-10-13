@@ -37,7 +37,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Event",
-   "options": "Unmapped Tag\nDuplicate Assignment\nSold Tag Read\nRetired Tag Read\nCounter Conflict\nIncomplete Set\nExit Alert\nBarcode Fallback\nTag Replaced\nDevice Offline\nAudit Shortage\nAudit Unexpected\nMissed Audit\nUnconfirmed Detach\nManual Override",
+   "options": "Unmapped Tag\nDuplicate Assignment\nSold Tag Read\nRetired Tag Read\nCounter Conflict\nIncomplete Set\nExit Alert\nBarcode Fallback\nTag Replaced\nDevice Offline\nAudit Shortage\nAudit Unexpected\nMissed Audit\nUnconfirmed Detach\nManual Override\nTag Lost\nUntagged Stock",
    "reqd": 1
   },
   {
@@ -172,7 +172,7 @@
   }
  ],
  "links": [],
- "modified": "2026-09-30 12:00:00.000000",
+ "modified": "2026-10-12 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Exception",

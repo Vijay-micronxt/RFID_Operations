@@ -82,7 +82,7 @@
    "fieldname": "items",
    "fieldtype": "Table",
    "label": "Labels",
-   "options": "Label Print Item",
+   "options": "Sticker Print Job Item",
    "reqd": 1
   }
  ],
@@ -91,7 +91,7 @@
  "modified": "2026-10-09 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
- "name": "Label Print Job",
+ "name": "Sticker Print Job",
  "naming_rule": "Expression",
  "owner": "Administrator",
  "permissions": [

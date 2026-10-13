@@ -12,6 +12,8 @@
   "require_scan_for_sale",
   "allow_label_fallback",
   "block_untracked_items",
+  "cb_sale",
+  "tag_release_mode",
   "device_section",
   "device_offline_minutes",
   "exit_gate_enabled",
@@ -40,6 +42,7 @@
   "barcode_prefix",
   "cb_barcode",
   "auto_label_job",
+  "label_copies",
   "component_labels",
   "label_layout_section",
   "label_print_format",
@@ -90,6 +93,18 @@
    "fieldname": "block_untracked_items",
    "fieldtype": "Check",
    "label": "Block stock items that are not RFID tracked"
+  },
+  {
+   "fieldname": "cb_sale",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tag_release_mode",
+   "fieldtype": "Select",
+   "label": "After A Sale",
+   "options": "Free the tag at once\nFree the tag after removal at the detach station",
+   "default": "Free the tag at once",
+   "description": "At once: the tag is reusable as soon as the bill is paid. After removal: it stays linked to the sold garment until it is read at the detach station."
   },
   {
    "fieldname": "device_section",
@@ -261,8 +276,16 @@
    "default": "0",
    "fieldname": "auto_label_job",
    "fieldtype": "Check",
-   "label": "Prepare a Label Print Job when stock is received",
+   "label": "Prepare a Sticker Print Job when stock is received",
    "description": "Purchase Receipt, Purchase Invoice with Update Stock, and Stock Entry receipts."
+  },
+  {
+   "fieldname": "label_copies",
+   "fieldtype": "Select",
+   "label": "Label Copies From A Document",
+   "options": "Enter by hand\nReceived quantity",
+   "default": "Enter by hand",
+   "description": "Enter by hand: items without serial numbers start at 0 copies and the user types how many stickers to print. Serial items always get one label per piece."
   },
   {
    "default": "0",
@@ -334,7 +357,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-09 12:00:00.000000",
+ "modified": "2026-10-13 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Settings",

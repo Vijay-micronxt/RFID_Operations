@@ -260,13 +260,20 @@ _rfid_invoice_events = {
 _inward_events = {
 	"on_submit": ["rfid_retail.overrides.stock.on_submit", "rfid_retail.labels.on_inward_submit"],
 }
+# Documents whose rows carry the tags read for them (bulk tagging at purchase, transfers, issues)
+_tagged_stock_events = {
+	"validate": "rfid_retail.overrides.stock.validate",
+	"on_submit": ["rfid_retail.overrides.stock.on_submit", "rfid_retail.labels.on_inward_submit"],
+	"on_cancel": "rfid_retail.overrides.stock.on_cancel",
+	"on_trash": "rfid_retail.overrides.stock.on_trash",
+}
 
 doc_events = {
 	"Sales Invoice": _rfid_invoice_events,
 	"POS Invoice": _rfid_invoice_events,
-	"Purchase Receipt": _inward_events,
+	"Purchase Receipt": _tagged_stock_events,
 	"Purchase Invoice": _inward_events,
-	"Stock Entry": _inward_events,
+	"Stock Entry": _tagged_stock_events,
 	"Stock Reconciliation": _inward_events,
 	# item codes and barcodes: own switches, independent of RFID
 	"Item": {
@@ -274,7 +281,7 @@ doc_events = {
 	},
 }
 
-app_include_js = "/assets/rfid_retail/js/rfid_retail_desk.js"
+app_include_js = "rfid_retail_desk.bundle.js"
 doctype_list_js = {
 	"Item": "public/js/item_list.js",
 	"Serial No": "public/js/serial_no_list.js",
@@ -284,6 +291,7 @@ extend_bootinfo = "rfid_retail.boot.extend_bootinfo"
 jinja = {
 	"methods": [
 		"rfid_retail.labels.barcode_svg",
+		"rfid_retail.labels.qr_svg",
 		"rfid_retail.labels.label_context",
 		"rfid_retail.printing.invoice_context",
 	],
@@ -293,6 +301,7 @@ scheduler_events = {
 	"cron": {
 		"*/5 * * * *": ["rfid_retail.api.gate.mark_stale_devices"],
 		"0 23 * * *": ["rfid_retail.api.audit.flag_missed_audit"],
+		"30 2 * * *": ["rfid_retail.overrides.stock.release_stale_reservations"],
 	},
 }
 

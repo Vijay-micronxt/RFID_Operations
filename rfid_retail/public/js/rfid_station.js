@@ -133,12 +133,18 @@
 	}
 
 	function highlightPending() {
-		document.querySelectorAll("#m-pending [data-open]").forEach((b) => b.classList.toggle("selected", b.dataset.open === M.unit?.name));
+		document.querySelectorAll("#m-pending [data-g]").forEach((b) => {
+			const g = groups[b.dataset.g];
+			const on = g && (g.kind === "unit"
+				? g.serial_no === M.unit?.name
+				: B.group && g.item_code === B.group.item_code && g.warehouse === B.group.warehouse);
+			b.classList.toggle("selected", !!on);
+		});
 	}
 
 	function renderUnit() {
 		const u = M.unit;
-		$("m-empty").hidden = !!u;
+		$("m-empty").hidden = !!u || !!B.group;
 		$("m-tagging").hidden = !u;
 		highlightPending();
 		if (!u) return;
@@ -194,6 +200,7 @@
 	}
 
 	async function openUnit(code) {
+		closeBulk();
 		M.unit = await call("mapping.unit_detail", { serial_no: code }, false);
 		pickNext();
 		renderUnit();
@@ -201,29 +208,172 @@
 		if (window.matchMedia("(max-width: 860px)").matches) $("m-tagging").scrollIntoView({ behavior: "smooth" });
 	}
 
+	// ---- bulk: identical pieces of one item, all tags on the reader at once
+	const B = { group: null, codes: [], verdicts: {} };
+	let groups = [];
+
+	function closeBulk() {
+		B.group = null;
+		B.codes = [];
+		B.verdicts = {};
+		$("m-bulk").hidden = true;
+	}
+
+	function openGroup(g) {
+		M.unit = null;
+		$("m-tagging").hidden = true;
+		B.group = g;
+		B.codes = [];
+		B.verdicts = {};
+		renderBulk();
+		highlightPending();
+		setTimeout(() => $("mb-read").focus(), 0);
+		if (window.matchMedia("(max-width: 860px)").matches) $("m-bulk").scrollIntoView({ behavior: "smooth" });
+	}
+
+	function renderBulk() {
+		const g = B.group;
+		$("m-empty").hidden = !!g || !!M.unit;
+		$("m-bulk").hidden = !g;
+		if (!g) return;
+		const qty = g.to_tag;
+		const n = B.codes.length;
+		const bad = B.codes.filter((c) => B.verdicts[c] && !B.verdicts[c].ok);
+		const checking = B.codes.some((c) => !B.verdicts[c]);
+		$("mb-name").textContent = g.item_name;
+		$("mb-meta").textContent = `${g.item_code} · ${g.warehouse}`;
+		$("mb-badge").textContent = g.kind === "serials" ? "With serial numbers" : "No serial numbers";
+		$("mb-n").textContent = n;
+		$("mb-qty").textContent = qty;
+		document.querySelector(".bulk-count").className = `bulk-count${n > qty ? " over" : n === qty ? " full" : ""}`;
+		$("mb-bar").style.width = `${Math.min(n / qty, 1) * 100}%`;
+		const warn = bad.length
+			? `${bad.length} tag(s) cannot be used (red below). Take them off the reader. Nothing is tagged yet.`
+			: n > qty
+				? `${n - qty} tag(s) too many: ${qty} piece(s) of this item wait for a tag. Take the extra tags off. Nothing is tagged yet.`
+				: n && n < qty
+					? `${qty - n} tag(s) missing: put the tags of all ${qty} pieces on the reader. Nothing is tagged yet.`
+					: "";
+		const ready = n === qty && !bad.length && !checking;
+		$("mb-warn").hidden = !warn;
+		$("mb-warn").textContent = warn;
+		$("mb-warn").className = n && n < qty && !bad.length ? "warnline soft" : "warnline";
+		$("mb-ok").textContent = n ? `${n - bad.length} usable` : "";
+		$("mb-save").disabled = !ready || B.saving;
+		clearTimeout(B.timer);
+		// All tags right: save by itself once the reader is quiet for a moment.
+		if (ready && !B.saving) B.timer = setTimeout(() => !$("mb-save").disabled && $("mb-save").click(), 1200);
+		$("mb-save").innerHTML = `${icon("save")}Save ${n ? n : ""} tag${n === 1 ? "" : "s"}`;
+		$("mb-list").innerHTML =
+			B.codes
+				.slice()
+				.reverse()
+				.map((c) => {
+					const v = B.verdicts[c];
+					const ok = !v || v.ok;
+					return `<div class="row"><span class="lead ${v ? (ok ? "ok" : "bad") : ""}">${icon(v ? (ok ? "check" : "block") : "hourglass_empty", "small")}</span>
+						<div class="grow"><b>${esc(c)}</b><small>${esc(v ? v.message : "Checking...")}</small></div>
+						<button class="x" data-drop="${esc(c)}" title="Remove">${icon("close", "small")}</button></div>`;
+				})
+				.join("") || '<div class="empty-row">No tags read yet.</div>';
+	}
+
+	async function addReads(codes) {
+		const fresh = [...new Set(codes.map((c) => c.toUpperCase()))].filter((c) => !B.codes.includes(c));
+		if (!fresh.length) return;
+		B.codes.push(...fresh);
+		renderBulk();
+		const out = await call("mapping.check_tags", { codes: fresh, item_code: B.group.item_code }, false);
+		out.forEach((v) => (B.verdicts[v.code] = v));
+		renderBulk();
+	}
+
+	onScan($("mb-read"), (codes) => addReads(codes));
+	$("mb-list").addEventListener("click", (e) => {
+		const b = e.target.closest("[data-drop]");
+		if (!b) return;
+		B.codes = B.codes.filter((c) => c !== b.dataset.drop);
+		renderBulk();
+	});
+	$("mb-clear").addEventListener("click", () => {
+		B.codes = [];
+		B.verdicts = {};
+		renderBulk();
+		$("mb-read").focus();
+	});
+	$("mb-close").addEventListener("click", () => {
+		closeBulk();
+		renderUnit();
+		$("m-code").focus();
+	});
+	$("mb-save").addEventListener("click", async () => {
+		const g = B.group;
+		if (B.saving) return;
+		B.saving = true;
+		renderBulk();
+		let r;
+		try {
+			r = await call("mapping.bulk_assign", { item_code: g.item_code, warehouse: g.warehouse, codes: B.codes });
+		} finally {
+			B.saving = false;
+			renderBulk();
+		}
+		snack(`${r.assigned} tag${r.assigned === 1 ? "" : "s"} saved on ${g.item_name}`);
+		await loadPending();
+		const next = groups.find((x) => x.kind !== "unit" && x.item_code === g.item_code && x.warehouse === g.warehouse);
+		if (next) openGroup(next);
+		else {
+			closeBulk();
+			renderUnit();
+			$("m-code").focus();
+		}
+	});
+
 	async function loadPending() {
-		const rows = await call("mapping.pending_units", {}, false).catch(() => []);
-		$("m-count").textContent = rows.length;
+		groups = await call("mapping.pending_groups", {}, false).catch(() => []);
+		$("m-count").textContent = groups.reduce((n, g) => n + g.to_tag, 0);
 		$("m-pending").innerHTML =
-			rows
-				.map(
-					(r) => `<button class="item" data-open="${esc(r.name)}">
-						<span class="thumb">${icon(r.custom_is_garment_set ? "checkroom" : "apparel")}</span>
-						<span class="grow"><b>${esc(r.item_name)}</b><small>${esc(r.name)}</small></span>
-						${r.custom_rfid_status === "Returned - Hold" ? '<span class="chip-s ret">Returned</span>' : r.retag ? '<span class="chip-s ret">Re-tag</span>' : '<span class="chip-s">New</span>'}
-						${icon("chevron_right", "muted")}</button>`
-				)
-				.join("") || `<div class="empty-row">Nothing waiting. New stock appears here after a purchase receipt.</div>`;
+			groups
+				.map((g, i) => {
+					const chip = g.kind === "unit"
+						? g.returned
+							? '<span class="chip-s ret">Returned</span>'
+							: g.retag
+								? '<span class="chip-s ret">Re-tag</span>'
+								: '<span class="chip-s set">Set</span>'
+						: `<span class="chip-s">${g.to_tag} to tag</span>`;
+					const sub = g.kind === "unit" ? g.serial_no : `${g.item_code} · ${g.warehouse}`;
+					return `<button class="item" data-g="${i}">
+						<span class="thumb">${icon(g.is_set ? "checkroom" : g.kind === "unit" ? "apparel" : "stacks")}</span>
+						<span class="grow"><b>${esc(g.item_name)}</b><small>${esc(sub)}</small></span>
+						${chip}${icon("chevron_right", "muted")}</button>`;
+				})
+				.join("") || `<div class="empty-row">Nothing waiting. New stock appears here after a purchase.</div>`;
 		highlightPending();
 	}
 	onOpen.mapping = () => {
 		loadPending();
-		renderUnit();
+		if (!B.group) renderUnit();
 	};
 
-	onScan($("m-code"), (codes) => openUnit(codes[0]));
+	onScan($("m-code"), async (codes) => {
+		const r = await call("mapping.open_code", { code: codes[0] }, false);
+		if (r.kind === "unit") {
+			closeBulk();
+			M.unit = r.unit;
+			pickNext();
+			renderUnit();
+		} else if (r.kind === "group") {
+			if (r.groups.length > 1) snack(`${r.item_code || r.groups[0].item_name} waits in ${r.groups.length} warehouses - showing ${r.groups[0].warehouse}`);
+			openGroup(r.groups[0]);
+		} else snack(`Every piece of ${r.item_name} already has a tag`);
+	});
 	onScan($("m-tag"), async (codes) => {
 		if (!M.unit || !M.current) return;
+		if (codes.length > 1) {
+			snack(`${codes.length} tags read at once. Hold only this piece's tag near the reader.`, true);
+			return;
+		}
 		const piece = M.current === "__single__" ? null : M.current;
 		M.unit = await call("mapping.map_tag", { epc: codes[0], serial_no: M.unit.name, component: piece, device: null });
 		snack("Tag saved");
@@ -233,8 +383,11 @@
 	});
 
 	$("m-pending").addEventListener("click", (e) => {
-		const b = e.target.closest("[data-open]");
-		if (b) openUnit(b.dataset.open);
+		const b = e.target.closest("[data-g]");
+		if (!b) return;
+		const g = groups[b.dataset.g];
+		if (g.kind === "unit") openUnit(g.serial_no);
+		else openGroup(g);
 	});
 	$("m-steps").addEventListener("click", (e) => {
 		const row = e.target.closest("[data-piece]");
@@ -253,6 +406,7 @@
 	});
 	$("m-next").addEventListener("click", () => {
 		M.unit = null;
+		closeBulk();
 		renderUnit();
 		loadPending();
 		$("m-code").focus();
@@ -283,6 +437,105 @@
 			} });
 		if (items.length) sheet(p.rfid_tag ? `${p.role} · tag ${p.rfid_tag}` : p.role, items);
 	}
+
+	// ------------------------------------------------------------ tag history
+	const EV = {
+		Assigned: ["good", "sell", "Tagged"],
+		Restored: ["good", "undo", "Put back"],
+		Found: ["good", "search", "Found"],
+		Returned: ["good", "assignment_return", "Came back (return)"],
+		Sold: ["sale", "payments", "Sold"],
+		Freed: ["", "lock_open", "Freed"],
+		Detached: ["", "content_cut", "Removed after sale"],
+		Transferred: ["", "local_shipping", "Moved"],
+		Reserved: ["warn", "pending", "Read on draft"],
+		"Reservation Released": ["", "remove_done", "Taken off draft"],
+		Replaced: ["warn", "sync", "Replaced"],
+		Damaged: ["bad", "broken_image", "Damaged"],
+		Lost: ["bad", "help", "Lost"],
+		Retired: ["bad", "block", "Retired"],
+		"Issued Out": ["", "logout", "Left stock"],
+		Rejected: ["bad", "error", "Refused"],
+		"Exit Alert": ["bad", "warning", "Exit alarm"],
+		Registered: ["", "add", "First seen"],
+		Correction: ["warn", "edit", "Correction"],
+	};
+	const money = (v) => (v ? `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : "");
+	const when = (v) => (v ? String(v).slice(0, 16).replace("T", " ") : "");
+	const docLink = (dt, dn) =>
+		dt && dn ? `<a href="/app/${dt.toLowerCase().replace(/ /g, "-")}/${encodeURIComponent(dn)}" target="_blank">${esc(dn)}</a>` : "";
+	const H = { story: null };
+
+	function renderStory(st) {
+		H.story = st;
+		const t = st.tag;
+		const actions = [];
+		if (t && t.current_assignment) actions.push(["Damaged", "broken_image", "Damaged - put a new tag"], ["Lost", "help", "Mark lost"]);
+		if (t && t.status === "Lost") actions.push(["Found", "search", "Found again"]);
+		if (t && ["Available"].includes(t.status)) actions.push(["Damaged", "broken_image", "Damaged"], ["Retired", "block", "Retire"]);
+		$("h-card").innerHTML = t
+			? `<div class="tagcard"><h3>${esc(t.name)}</h3><span class="badge${t.current_assignment ? " ok" : ""}">${esc(t.status)}</span>
+				<div class="kv">
+					<span>On</span><span>${t.item_code ? `${esc(t.item_name || t.item_code)}${t.serial_no ? ` · ${esc(t.serial_no)}` : ""}${t.component ? ` · ${esc(t.component)}` : ""}` : "nothing"}</span>
+					<span>Where</span><span>${esc(t.warehouse || "-")}</span>
+					<span>Times used</span><span>${t.cycle || 0}</span>
+					${t.reserved_for ? `<span>On draft</span><span>${docLink(t.reserved_doctype, t.reserved_for)}</span>` : ""}
+					${t.last_read_on ? `<span>Last read</span><span>${esc(when(t.last_read_on))}</span>` : ""}
+				</div>
+				<div class="buttons">${actions
+					.map(([st, ic, label]) => `<button class="btn ghost" data-cond="${st}">${icon(ic, "small")}${label}</button>`)
+					.join("")}</div></div>`
+			: `<div class="tagcard"><h3>${esc(st.code)}</h3><p class="muted small">Garment label · history of its tags</p></div>`;
+
+		const uses = st.uses
+			.map(
+				(u) => `<tr><td>${u.cycle || ""}</td><td>${esc(u.item_name || u.item_code || "")}${u.serial_no ? `<br><small class="muted">${esc(u.serial_no)}</small>` : ""}</td>
+				<td>${esc(when(u.assigned_on))}<br><small class="muted">${docLink(u.source_doctype, u.source_name)}</small></td>
+				<td>${u.sales_invoice ? `${docLink("Sales Invoice", u.sales_invoice)}<br><small class="muted">${money(u.sold_rate)} · ${esc(u.sold_by_name || "")}</small>` : "-"}</td>
+				<td>${esc(u.close_reason || (u.status === "Active" ? "On garment" : u.status))}<br><small class="muted">${esc(when(u.closed_on))}</small></td></tr>`
+			)
+			.join("");
+		const events = st.events
+			.map((e) => {
+				const [cls, ic, label] = EV[e.action] || ["", "circle", e.action];
+				const garment = [e.item_name || e.item_code, e.serial_no, e.component].filter(Boolean).map(esc).join(" · ");
+				const place = e.to_warehouse ? `${esc(e.warehouse)} → ${esc(e.to_warehouse)}` : esc(e.warehouse || "");
+				return `<div class="ev ${cls}"><b>${icon(ic, "small")} ${esc(label)}</b>${t ? "" : ` <span class="muted">${esc(e.tag)}</span>`}
+					${garment ? ` · ${garment}` : ""}${place ? ` <span class="muted">· ${place}</span>` : ""}
+					${e.amount ? ` · <b>${money(e.amount)}</b>` : ""}
+					<div class="when">${esc(when(e.event_time))} · ${esc(e.by || "")}${e.reference_name ? ` · ${docLink(e.reference_doctype, e.reference_name)}` : ""}</div>
+					${e.reason ? `<div class="note">${esc(e.reason)}</div>` : ""}</div>`;
+			})
+			.join("");
+		$("h-out").innerHTML = `
+			<div class="work-head"><div><h2>${esc(st.code)}</h2><p class="muted">${st.events.length} events · ${st.uses.length} garment${st.uses.length === 1 ? "" : "s"}</p></div></div>
+			${uses ? `<h3 class="label">Garments this tag was on</h3><table class="uses"><thead><tr><th>#</th><th>Garment</th><th>Tagged</th><th>Sold</th><th>Ended</th></tr></thead><tbody>${uses}</tbody></table>` : ""}
+			<h3 class="label">Everything that happened</h3>
+			<div class="timeline">${events || '<div class="empty-row">No history yet.</div>'}</div>`;
+	}
+
+	async function openStory(code) {
+		renderStory(await call("mapping.tag_story", { code }, false));
+	}
+	onScan($("h-code"), (codes) => openStory(codes[0]));
+	$("h-card").addEventListener("click", async (e) => {
+		const b = e.target.closest("[data-cond]");
+		if (!b || !H.story?.tag) return;
+		const tag = H.story.tag;
+		const status = b.dataset.cond;
+		if (status === "Damaged" && tag.current_assignment) {
+			const fresh = await ask(`New tag for ${tag.item_name || tag.item_code}`, "Read the new tag (leave empty to just retire)");
+			if (fresh) {
+				await call("mapping.replace_tag", { old_epc: tag.name, new_epc: fresh, reason: "Tag damaged" });
+				snack("Old tag marked damaged, new tag saved");
+				return openStory(tag.name);
+			}
+		}
+		const reason = await ask(`${status}: why?`, "e.g. torn, fell off, not found in count");
+		if (!reason) return;
+		renderStory(await call("mapping.set_condition", { epc: tag.name, status, reason }));
+		snack(`Tag marked ${status.toLowerCase()}`);
+	});
 
 	// ------------------------------------------------------------ remove tags
 	let released = 0;

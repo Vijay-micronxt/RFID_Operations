@@ -13,10 +13,19 @@
   "item_code",
   "serial_no",
   "component",
+  "warehouse",
   "current_assignment",
+  "cycle",
+  "basket",
   "cb1",
   "last_read_on",
   "last_read_device",
+  "reserved_section",
+  "reserved_doctype",
+  "reserved_for",
+  "reserved_row",
+  "history_section",
+  "history_html",
   "notes"
  ],
  "fields": [
@@ -35,7 +44,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Available\nAssigned\nSold - Pending Detach\nHold\nDamaged\nRetired",
+   "options": "Available\nReserved\nAssigned\nSold - Pending Detach\nHold\nDamaged\nLost\nRetired",
    "read_only": 1
   },
   {
@@ -63,11 +72,35 @@
    "read_only": 1
   },
   {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "label": "Warehouse",
+   "options": "Warehouse",
+   "read_only": 1,
+   "in_standard_filter": 1,
+   "in_list_view": 1
+  },
+  {
    "fieldname": "current_assignment",
    "fieldtype": "Link",
    "label": "Current Assignment",
    "options": "RFID Tag Assignment",
    "read_only": 1
+  },
+  {
+   "fieldname": "cycle",
+   "fieldtype": "Int",
+   "label": "Times Used",
+   "read_only": 1,
+   "description": "Goes up by one every time the tag is put on a new garment"
+  },
+  {
+   "fieldname": "basket",
+   "fieldtype": "Link",
+   "label": "On Counter Basket",
+   "options": "RFID Basket",
+   "read_only": 1,
+   "no_copy": 1
   },
   {
    "fieldname": "cb1",
@@ -87,13 +120,51 @@
    "read_only": 1
   },
   {
+   "fieldname": "reserved_section",
+   "fieldtype": "Section Break",
+   "label": "Reserved On Draft",
+   "collapsible": 1,
+   "depends_on": "reserved_for"
+  },
+  {
+   "fieldname": "reserved_doctype",
+   "fieldtype": "Link",
+   "label": "Reserved On Type",
+   "options": "DocType",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reserved_for",
+   "fieldtype": "Dynamic Link",
+   "label": "Reserved On",
+   "options": "reserved_doctype",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reserved_row",
+   "fieldtype": "Data",
+   "label": "Reserved Row",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "history_section",
+   "fieldtype": "Section Break",
+   "label": "History"
+  },
+  {
+   "fieldname": "history_html",
+   "fieldtype": "HTML",
+   "label": "History"
+  },
+  {
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
   }
  ],
  "links": [],
- "modified": "2026-09-30 12:00:00.000000",
+ "modified": "2026-10-12 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Tag",

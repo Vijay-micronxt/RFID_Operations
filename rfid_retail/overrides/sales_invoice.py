@@ -2,15 +2,17 @@
 
 These hooks run for every entry path - RFID counter, POS Next, desk form,
 REST - so a set can never be finalised unless all its components were verified
-on the counter's basket, and a garment is only released once the sale is
-submitted. Rules come from RFID Settings; with RFID switched off they do nothing.
+on the counter's basket, and a tag is only released once the sale is submitted
+(never on a failed payment or a failed submit, which roll back). The exact tags
+sold stay on the invoice row (custom_rfid_manifest) and in the tag history.
+Rules come from RFID Settings; with RFID switched off they do nothing.
 """
 
 import json
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, flt, now_datetime
 
 from rfid_retail import rfid
 from rfid_retail.settings import get as setting, is_enabled
@@ -47,7 +49,7 @@ def before_submit(doc, method=None):
 			if not rfid.is_rfid_item(row.item_code) and frappe.get_cached_value("Item", row.item_code, "is_stock_item"):
 				frappe.throw(_("Row {0}: {1} has no RFID identity. Only RFID-tracked items can be sold here.").format(
 					row.idx, row.item_code))
-	basket_reads = {}
+	basket_reads, basket_tags = {}, {}
 	if doc.get("custom_rfid_basket"):
 		basket = frappe.get_doc("RFID Basket", doc.custom_rfid_basket)
 		if basket.status == "Cancelled":
@@ -57,9 +59,14 @@ def before_submit(doc, method=None):
 		for read in basket.reads:
 			if read.serial_no:
 				basket_reads.setdefault(read.serial_no, set()).add(read.component or read.serial_no)
+			elif read.item_code:
+				basket_tags.setdefault(read.item_code, []).append(read.epc)
 
 	seen = set()
 	for row in rfid_rows(doc):
+		if not rfid.has_serial(row.item_code):
+			row.custom_rfid_manifest = json.dumps(_item_rows_tags(doc, row, basket_tags), separators=(",", ":"))
+			continue
 		serials = get_row_serials(row)
 		if len(serials) != abs(cint(row.qty)):
 			frappe.throw(_("Row {0}: {1} is RFID tracked; pick exactly one serial per unit.").format(
@@ -71,6 +78,37 @@ def before_submit(doc, method=None):
 			seen.add(serial_no)
 			manifest.append(_check_serial(doc, row, serial_no, basket_reads))
 		row.custom_rfid_manifest = json.dumps(manifest, separators=(",", ":"))
+
+
+def _item_rows_tags(doc, row, basket_tags):
+	"""Tags read on the counter for this row of a non-serial item. Each tag counts once on the invoice."""
+	qty = abs(cint(flt(row.get("stock_qty") or row.qty)))
+	pool = basket_tags.get(row.item_code, [])
+	tags, basket_tags[row.item_code] = pool[:qty], pool[qty:]
+	for code in tags:
+		res = rfid.resolve_code(code)
+		if res.kind != "tag" or res.item_code != row.item_code:
+			frappe.throw(_("Row {0}: tag {1} is no longer on a unit of {2}. Read the tray again.").format(
+				row.idx, code, row.item_code))
+		if res.tag_status != rfid.TAG_ASSIGNED:
+			frappe.throw(_("Row {0}: tag {1} is {2}.").format(row.idx, code, res.tag_status))
+		if res.warehouse != row.warehouse:
+			frappe.throw(_("Row {0}: tag {1} is recorded in {2}, not {3}.").format(row.idx, code, res.warehouse,
+				row.warehouse))
+		if res.basket and res.basket != doc.get("custom_rfid_basket"):
+			frappe.throw(_("Tag {0} is being billed on another counter ({1}).").format(code, res.basket))
+	short = qty - len(tags)
+	if short > 0:
+		where = doc.get("pos_profile") or _("desk")
+		if cint(setting("require_scan_for_sale")) and not cint(setting("allow_label_fallback")):
+			rfid.log_exception_on_failure("Manual Override",
+				_("{0} x {1} billed without RFID reads ({2}).").format(short, row.item_code, where),
+				severity="Medium", pos_profile=doc.get("pos_profile"), reference_doctype=doc.doctype,
+				reference_name=doc.name)
+			frappe.throw(_("Row {0}: read the RFID tags of {1} - {2} of {3} read.").format(
+				row.idx, row.item_code, len(tags), qty))
+		doc.flags.rfid_untagged_sales = (doc.flags.rfid_untagged_sales or []) + [(row.item_code, short, row.warehouse)]
+	return [{"tag": code, "item_code": row.item_code} for code in tags]
 
 
 def _check_serial(doc, row, serial_no, basket_reads):
@@ -128,26 +166,72 @@ def on_submit(doc, method=None):
 		_on_return(doc)
 		return
 	for row in rfid_rows(doc):
-		for serial_no in get_row_serials(row):
-			_mark_sold(doc, serial_no)
+		if rfid.has_serial(row.item_code):
+			for serial_no in get_row_serials(row):
+				_mark_sold(doc, row, serial_no)
+		else:
+			for entry in _manifest(row):
+				_sell_tag(doc, row, entry["tag"])
+	for item_code, short, warehouse in doc.flags.rfid_untagged_sales or []:
+		rfid.log_exception("Barcode Fallback",
+			_("{0} x {1} sold on {2} without reading their tags. {0} tag(s) of {1} in {3} now stand for stock "
+				"that is gone; remove those tags or mark them lost after the stock count.").format(
+				short, item_code, doc.name, warehouse),
+			severity="Low", pos_profile=doc.get("pos_profile"), reference_doctype=doc.doctype, reference_name=doc.name)
 	if doc.get("custom_rfid_basket"):
 		frappe.db.set_value("RFID Basket", doc.custom_rfid_basket, {"status": "Billed", "sales_invoice": doc.name, "customer": doc.customer})
 
 
-def _mark_sold(doc, serial_no):
+def _manifest(row):
+	try:
+		data = json.loads(row.get("custom_rfid_manifest") or "[]")
+	except ValueError:
+		return []
+	return [e for e in data if isinstance(e, dict) and e.get("tag")]
+
+
+def free_at_once():
+	return not (setting("tag_release_mode") or "").startswith("Free the tag after")
+
+
+def _sell_tag(doc, row, code):
+	"""Record the sale on the tag's current use, then free the tag (or keep it until detached)."""
+	tag = frappe.get_doc("RFID Tag", code, for_update=True)
+	if not tag.current_assignment:
+		return
+	frappe.db.set_value("RFID Tag Assignment", tag.current_assignment,
+		{"sales_invoice": doc.name, "sold_rate": row.rate, "sold_by": frappe.session.user, "sold_on": now_datetime()})
+	if free_at_once():
+		rfid.close_assignment(code, "Sold", action="Sold", reference_doctype=doc.doctype, reference_name=doc.name,
+			amount=row.rate, remarks=_("Sold and freed for reuse"))
+		return
+	previous = tag.status
+	tag.update({"status": rfid.TAG_SOLD, "basket": None})
+	tag.save(ignore_permissions=True)
+	rfid.log_tag_event(tag, "Sold", previous_status=previous, reference_doctype=doc.doctype,
+		reference_name=doc.name, amount=row.rate)
+
+
+def _mark_sold(doc, row, serial_no):
 	frappe.db.set_value("Serial No", serial_no,
 		{"custom_rfid_status": rfid.SOLD, "custom_sales_invoice": doc.name, "custom_rfid_basket": None},
 		update_modified=False)
 	for comp in rfid.get_components(serial_no):
 		frappe.db.set_value("Garment Component", comp.name, {"status": "Sold", "sales_invoice": doc.name})
 	for asg in frappe.get_all("RFID Tag Assignment", {"serial_no": serial_no, "status": "Active"}, ["name", "tag"]):
-		frappe.db.set_value("RFID Tag Assignment", asg.name, "sales_invoice", doc.name)
-		frappe.db.set_value("RFID Tag", asg.tag, "status", rfid.TAG_SOLD)
+		_sell_tag(doc, row, asg.tag)
 
 
 def _on_return(doc):
-	"""Returned units go on hold. They are re-verified and re-tagged before resale."""
+	"""Returned units go on hold (serials) or wait for a new tag (non-serial).
+
+	A tag that was kept on the sold garment (detach mode) and comes back with it is
+	put back to work on the same unit.
+	"""
 	for row in rfid_rows(doc):
+		if not rfid.has_serial(row.item_code):
+			_return_item_tags(doc, row)
+			continue
 		for serial_no in get_row_serials(row):
 			frappe.db.set_value("Serial No", serial_no, "custom_rfid_status", rfid.RETURNED, update_modified=False)
 			for comp in rfid.get_components(serial_no):
@@ -159,30 +243,77 @@ def _on_return(doc):
 				severity="Low", serial_no=serial_no, reference_doctype=doc.doctype, reference_name=doc.name)
 
 
+def _return_item_tags(doc, row):
+	qty = abs(cint(flt(row.get("stock_qty") or row.qty)))
+	original = doc.get("return_against")
+	still_on = []
+	if original:
+		still_on = frappe.get_all("RFID Tag", {"status": rfid.TAG_SOLD, "item_code": row.item_code,
+			"current_assignment": ["in", frappe.get_all("RFID Tag Assignment",
+				{"sales_invoice": original, "status": "Active", "item_code": row.item_code}, pluck="name") or [""]]},
+			pluck="name", limit=qty)
+	for code in still_on:
+		tag = frappe.get_doc("RFID Tag", code, for_update=True)
+		tag.update({"status": rfid.TAG_ASSIGNED, "warehouse": row.warehouse})
+		tag.save(ignore_permissions=True)
+		frappe.db.set_value("RFID Tag Assignment", tag.current_assignment,
+			{"sales_invoice": None, "sold_rate": 0, "sold_by": None, "sold_on": None, "warehouse": row.warehouse})
+		rfid.log_tag_event(tag, "Returned", previous_status=rfid.TAG_SOLD, reference_doctype=doc.doctype,
+			reference_name=doc.name)
+	if qty > len(still_on):
+		rfid.log_exception("Untagged Stock",
+			_("{0} x {1} returned on {2} without a tag. Tag them at the Tag garments station before resale.").format(
+				qty - len(still_on), row.item_code, doc.name),
+			severity="Low", reference_doctype=doc.doctype, reference_name=doc.name)
+
+
 def on_cancel(doc, method=None):
 	if not is_enabled():
 		return
+	from rfid_retail.overrides.stock import restore_tags
+
 	if cint(doc.get("is_return")):
 		for row in rfid_rows(doc):
-			for serial_no in get_row_serials(row):
+			for serial_no in get_row_serials(row) if rfid.has_serial(row.item_code) else []:
 				sold_on = frappe.db.get_value("Serial No", serial_no, "custom_sales_invoice")
 				frappe.db.set_value("Serial No", serial_no,
 					"custom_rfid_status", rfid.SOLD if sold_on else rfid.PENDING, update_modified=False)
+		# Tags put back to work by the return go back to the sold state.
+		for ev in frappe.get_all("RFID Tag Event", {"reference_doctype": doc.doctype, "reference_name": doc.name,
+			"action": "Returned"}, ["tag", "cycle"]):
+			tag = frappe.get_doc("RFID Tag", ev.tag, for_update=True)
+			if cint(tag.cycle) == cint(ev.cycle) and tag.status == rfid.TAG_ASSIGNED:
+				tag.status = rfid.TAG_SOLD
+				tag.save(ignore_permissions=True)
+				frappe.db.set_value("RFID Tag Assignment", tag.current_assignment, "sales_invoice", doc.return_against)
+				rfid.log_tag_event(tag, "Correction", previous_status=rfid.TAG_ASSIGNED,
+					reference_doctype=doc.doctype, reference_name=doc.name, reason=_("Return cancelled"))
 		return
+
 	for row in rfid_rows(doc):
-		for serial_no in get_row_serials(row):
+		for serial_no in get_row_serials(row) if rfid.has_serial(row.item_code) else []:
 			if frappe.db.get_value("Serial No", serial_no, "custom_sales_invoice") != doc.name:
 				continue
-			for asg in frappe.get_all("RFID Tag Assignment",
-				{"serial_no": serial_no, "status": "Active"}, ["name", "tag"]):
-				frappe.db.set_value("RFID Tag Assignment", asg.name, "sales_invoice", None)
-				frappe.db.set_value("RFID Tag", asg.tag, "status", rfid.TAG_ASSIGNED)
 			for comp in rfid.get_components(serial_no):
 				frappe.db.set_value("Garment Component", comp.name,
 					{"status": "Tagged" if comp.rfid_tag else "Pending Tag", "sales_invoice": None})
 			# Back to Pending, then Ready again only if every piece still carries its tag.
 			frappe.db.set_value("Serial No", serial_no,
 				{"custom_sales_invoice": None, "custom_rfid_status": rfid.PENDING}, update_modified=False)
+	# Tags kept on the sold garments (detach mode) simply go back to work.
+	for asg in frappe.get_all("RFID Tag Assignment", {"sales_invoice": doc.name, "status": "Active"},
+		["name", "tag", "serial_no"]):
+		frappe.db.set_value("RFID Tag Assignment", asg.name,
+			{"sales_invoice": None, "sold_rate": 0, "sold_by": None, "sold_on": None})
+		tag = frappe.get_doc("RFID Tag", asg.tag, for_update=True)
+		previous, tag.status = tag.status, rfid.TAG_ASSIGNED
+		tag.save(ignore_permissions=True)
+		rfid.log_tag_event(tag, "Restored", previous_status=previous, reference_doctype=doc.doctype,
+			reference_name=doc.name, reason=_("Sale cancelled"))
+	# Tags freed at the sale: back on the same unit if nobody reused them, else flag for a new tag.
+	restore_tags(doc, ("Sold",))
+	for row in rfid_rows(doc):
+		for serial_no in get_row_serials(row) if rfid.has_serial(row.item_code) else []:
 			rfid.refresh_serial_readiness(serial_no)
 	if doc.get("custom_rfid_basket"):
 		frappe.db.set_value("RFID Basket", doc.custom_rfid_basket, "status", "Cancelled")

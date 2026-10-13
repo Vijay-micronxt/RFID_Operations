@@ -96,13 +96,24 @@ def get_custom_fields():
 		"no_copy": 1,
 		"insert_after": "pos_profile",
 	}
+	row_tags = [
+		{"fieldname": "custom_rfid_tags", "fieldtype": "Small Text", "label": "RFID Tags", "no_copy": 1,
+			"read_only": 1, "allow_on_submit": 1, "insert_after": "serial_no",
+			"description": "Tags read for this row after submit (RFID Tags button), one per unit."},
+		{"fieldname": "custom_rfid_tag_count", "fieldtype": "Int", "label": "RFID Tags Read", "read_only": 1,
+			"allow_on_submit": 1, "no_copy": 1, "insert_after": "custom_rfid_tags"},
+	]
 	return {
+		"Purchase Receipt Item": row_tags,
+		"Stock Entry Detail": row_tags,
 		"Item": [
 			{"fieldname": "custom_rfid_section", "fieldtype": "Section Break", "label": "RFID",
 				"insert_after": "has_serial_no", "collapsible": 0},
 			{"fieldname": "custom_rfid_tracked", "fieldtype": "Check", "label": "RFID Tracked Garment",
 				"insert_after": "custom_rfid_section",
-				"description": "Every unit gets a serial number and reusable RFID tag(s). Needs Has Serial No."},
+				"description": "Every unit carries a reusable RFID tag. With Has Serial No each unit also gets a serial "
+					"number (set a Serial No Series to create them automatically); without it, tags stand for "
+					"units of the item."},
 			{"fieldname": "custom_style_code", "fieldtype": "Data", "label": "Style Code",
 				"insert_after": "custom_rfid_tracked", "in_standard_filter": 1},
 			{"fieldname": "custom_supplier", "fieldtype": "Link", "label": "Supplier", "options": "Supplier",

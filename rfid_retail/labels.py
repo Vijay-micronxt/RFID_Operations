@@ -128,8 +128,34 @@ def barcode_svg(value, height="100%"):
 	)
 
 
+def qr_svg(value, size="100%"):
+	"""Jinja: QR code as inline SVG (no internet needed, unlike a QR web service)."""
+	import pyqrcode
+
+	value = (value or "").strip()
+	if not value:
+		return ""
+	matrix = pyqrcode.create(value, error="M").code
+	n = len(matrix)
+	cells = "".join(
+		f'<rect x="{x}" y="{y}" width="1" height="1"/>'
+		for y, line in enumerate(matrix)
+		for x, bit in enumerate(line)
+		if bit
+	)
+	return (
+		f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 {n + 4} {n + 4}" '
+		f'style="width:{size};height:{size};display:block" shape-rendering="crispEdges">{cells}</svg>'
+	)
+
+
+def manual_copies():
+	"""RFID Settings: copies of non-serial items are typed by the user instead of taken from the document."""
+	return (get_settings().label_copies or "").startswith("Enter")
+
+
 def label_context(doc):
-	"""Jinja: settings plus one entry per physical label for a Label Print Job."""
+	"""Jinja: settings plus one entry per physical label for a Sticker Print Job."""
 	settings = get_settings()
 	labels = []
 	for row in doc.items:
@@ -187,7 +213,7 @@ def item_details(item_code):
 
 
 def fill_row(row, price_list=None):
-	"""Complete a Label Print Item from whatever identifies it."""
+	"""Complete a Sticker Print Job Item from whatever identifies it."""
 	if row.component and not row.serial_no:
 		row.serial_no = frappe.db.get_value("Garment Component", row.component, "serial_no")
 	if row.serial_no and not row.item_code:
@@ -217,7 +243,7 @@ def rows_for_unit(item_code, serial_no=None, qty=1, with_components=None):
 	if with_components is None:
 		with_components = cint(get_settings().component_labels)
 	if not serial_no:
-		return [{"item_code": item_code, "copies": max(cint(qty), 0)}]
+		return [{"item_code": item_code, "copies": 0 if manual_copies() else max(cint(qty), 0)}]
 	rows = [{"item_code": item_code, "serial_no": serial_no, "copies": 1}]
 	if with_components:
 		for comp in frappe.get_all("Garment Component", filters={"serial_no": serial_no}, pluck="name",
@@ -281,7 +307,7 @@ def in_group(group, parent):
 def make_job(rows, source_doctype=None, source_name=None, company=None):
 	if not rows:
 		frappe.throw(_("Nothing to label: no stock items found."))
-	job = frappe.new_doc("Label Print Job")
+	job = frappe.new_doc("Sticker Print Job")
 	job.source_doctype = source_doctype
 	job.source_name = source_name
 	job.company = company or frappe.defaults.get_user_default("Company")
@@ -316,7 +342,7 @@ def on_inward_submit(doc, method=None):
 
 
 def _check_create():
-	if not frappe.has_permission("Label Print Job", "create"):
+	if not frappe.has_permission("Sticker Print Job", "create"):
 		frappe.throw(_("Not permitted to create label print jobs."), frappe.PermissionError)
 
 
@@ -326,7 +352,7 @@ def make_from_document(source_doctype, source_name):
 	if source_doctype not in INWARD_DOCTYPES:
 		frappe.throw(_("Labels can be made from {0}.").format(", ".join(INWARD_DOCTYPES)))
 	frappe.has_permission(source_doctype, "read", source_name, throw=True)
-	existing = frappe.db.get_value("Label Print Job",
+	existing = frappe.db.get_value("Sticker Print Job",
 		{"source_doctype": source_doctype, "source_name": source_name, "status": "Draft"}, "name")
 	if existing:
 		return existing
@@ -360,8 +386,8 @@ def make_from_serials(serials):
 
 @frappe.whitelist()
 def add_rows(job, source_doctype=None, source_name=None, warehouse=None, item_group=None, item_code=None):
-	"""Label Print Job form: append rows from a document or from current stock."""
-	doc = frappe.get_doc("Label Print Job", job)
+	"""Sticker Print Job form: append rows from a document or from current stock."""
+	doc = frappe.get_doc("Sticker Print Job", job)
 	doc.check_permission("write")
 	if source_doctype and source_name:
 		frappe.has_permission(source_doctype, "read", source_name, throw=True)
@@ -378,7 +404,7 @@ def add_rows(job, source_doctype=None, source_name=None, warehouse=None, item_gr
 
 @frappe.whitelist()
 def mark_printed(job):
-	doc = frappe.get_doc("Label Print Job", job)
+	doc = frappe.get_doc("Sticker Print Job", job)
 	doc.check_permission("write")
 	doc.db_set({"status": "Printed", "printed_count": cint(doc.printed_count) + 1})
 	return doc.printed_count

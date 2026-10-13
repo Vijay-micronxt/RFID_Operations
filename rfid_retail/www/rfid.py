@@ -9,6 +9,7 @@ no_cache = 1
 TABS = {
 	"counter": ("Billing",),
 	"mapping": ("Tag Mapping", "Tag Repair"),
+	"history": ("Tag Mapping", "Tag Repair", "Detach", "Stock Audit", "Audit Review"),
 	"detach": ("Detach",),
 	"gate": ("Exit Gate",),
 	"audit": ("Stock Audit", "Audit Review"),
@@ -38,6 +39,9 @@ def get_context(context):
 	# Warehouses holding RFID stock first (most units on top), so the count defaults to the real floor.
 	rfid_units = dict(frappe.db.sql("""select warehouse, count(*) from `tabSerial No`
 		where status='Active' and ifnull(custom_rfid_status, '') != '' group by warehouse"""))
+	for wh, n in frappe.db.sql("""select warehouse, count(*) from `tabRFID Tag`
+		where ifnull(warehouse, '') != '' and ifnull(serial_no, '') = '' group by warehouse"""):
+		rfid_units[wh] = rfid_units.get(wh, 0) + n
 	context.warehouses = sorted(
 		frappe.get_all("Warehouse", {"is_group": 0, "company": context.company}, pluck="name"),
 		key=lambda w: (-rfid_units.get(w, 0), w))
