@@ -98,9 +98,10 @@ def get_custom_fields():
 	}
 	row_tags = [
 		{"fieldname": "custom_rfid_tags", "fieldtype": "Small Text", "label": "RFID Tags", "no_copy": 1,
-			"insert_after": "serial_no", "description": "Tags read for this row, one per unit. Use the RFID Tags button."},
+			"read_only": 1, "allow_on_submit": 1, "insert_after": "serial_no",
+			"description": "Tags read for this row after submit (RFID Tags button), one per unit."},
 		{"fieldname": "custom_rfid_tag_count", "fieldtype": "Int", "label": "RFID Tags Read", "read_only": 1,
-			"no_copy": 1, "insert_after": "custom_rfid_tags"},
+			"allow_on_submit": 1, "no_copy": 1, "insert_after": "custom_rfid_tags"},
 	]
 	return {
 		"Purchase Receipt Item": row_tags,

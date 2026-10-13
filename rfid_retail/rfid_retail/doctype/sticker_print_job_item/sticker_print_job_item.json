@@ -64,8 +64,9 @@
    "default": "1",
    "fieldname": "copies",
    "fieldtype": "Int",
-   "label": "Copies",
-   "in_list_view": 1
+   "label": "Qty",
+   "in_list_view": 1,
+   "description": "How many stickers to print"
   }
  ],
  "links": [],

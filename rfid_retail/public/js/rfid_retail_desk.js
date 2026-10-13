@@ -50,15 +50,9 @@ rfid_retail.open_label_job = function (method, args) {
 ["Purchase Receipt", "Purchase Invoice", "Stock Entry", "Stock Reconciliation"].forEach((doctype) => {
 	frappe.ui.form.on(doctype, {
 		refresh(frm) {
-			if (frm.doc.docstatus === 2 || frm.doc.is_return) return;
+			if (frm.doc.docstatus !== 1 || frm.doc.is_return) return;
 			if (doctype === "Purchase Invoice" && !frm.doc.update_stock) return;
 			if (!frappe.model.can_create("Sticker Print Job")) return;
-			if (frm.doc.docstatus === 0) {
-				frm.add_custom_button(__("Print Stickers"), () =>
-					frappe.msgprint(__("Submit first: stickers are made for the stock this document brings in."))
-				);
-				return;
-			}
 			frm.add_custom_button(__("Print Stickers"), () =>
 				rfid_retail.open_label_job("rfid_retail.labels.make_from_document", {
 					source_doctype: frm.doctype,
@@ -86,134 +80,181 @@ rfid_retail.toggle_item_code = function (frm) {
 };
 
 // ------------------------------------------------------------ RFID tags on stock rows
-// Put all tags of one row's item on the reader at once; each read code lands in the list.
-// Stock arrives through a Purchase Receipt or a Stock Entry; that is where the tags are read.
+// After submit: pick a row, put all tags of its pieces on the reader at once. The tags are saved
+// only when their number is exactly what the row needs and every tag is usable.
 const RFID_TAG_DOCTYPES = ["Purchase Receipt", "Stock Entry"];
 
 RFID_TAG_DOCTYPES.forEach((doctype) => {
 	frappe.ui.form.on(doctype, {
 		refresh(frm) {
-			if (!(frappe.boot.rfid_retail || {}).enabled || frm.doc.docstatus !== 0) return;
+			if (!(frappe.boot.rfid_retail || {}).enabled || frm.doc.docstatus !== 1) return;
 			frm.add_custom_button(__("RFID Tags"), () => rfid_retail.tag_dialog(frm));
 		},
 	});
 });
 
 rfid_retail.tag_dialog = async function (frm) {
-	if (frm.is_new() || frm.is_dirty()) await frm.save();
-	const codes = [...new Set((frm.doc.items || []).map((r) => r.item_code).filter(Boolean))];
-	const items = await frappe.db.get_list("Item", {
-		filters: { name: ["in", codes], custom_rfid_tracked: 1 },
-		fields: ["name", "item_name", "has_serial_no"],
-		limit: codes.length || 1,
-	});
-	const rfidItems = Object.fromEntries(items.map((i) => [i.name, i]));
-	const rows = (frm.doc.items || []).filter((r) => rfidItems[r.item_code]);
+	let rows = await frappe.xcall("rfid_retail.overrides.stock.row_tag_rows", { doctype: frm.doctype, name: frm.doc.name });
 	if (!rows.length) {
 		frappe.msgprint(__("No RFID item on this document. Tick RFID Tracked Garment on the item first."));
 		return;
 	}
-	const label = (r) => `${__("Row")} ${r.idx}: ${rfidItems[r.item_code].item_name} (${r.item_code}) · ${r.transfer_qty || r.stock_qty || r.qty}`;
-	const state = { row: rows[0], codes: [], verdicts: {} };
+	const esc = frappe.utils.escape_html;
+	const verb = { in: __("to tag"), transfer: __("to move"), out: __("to free") };
+	const label = (r) =>
+		`${__("Row")} ${r.idx}: ${r.item_name} (${r.item_code}) · ${r.to_tag ? `${r.to_tag} ${verb[r.direction]}` : __("done")}`;
+	const S = { row: rows.find((r) => r.to_tag) || rows[0], codes: [], verdicts: {}, timer: null, saving: false };
 
 	const d = new frappe.ui.Dialog({
 		title: __("RFID Tags"),
 		size: "large",
 		fields: [
-			{ fieldname: "row", fieldtype: "Select", label: __("Item row"), options: rows.map(label), default: label(rows[0]), onchange: () => loadRow() },
+			{ fieldname: "row", fieldtype: "Select", label: __("Item row"), options: rows.map(label), default: label(S.row), onchange: () => pick() },
 			{ fieldname: "summary", fieldtype: "HTML" },
 			{
 				fieldname: "read",
 				fieldtype: "Data",
-				label: __("Tags read"),
-				description: __("Put all tags of this item on the reader. Every tag counts once; repeated reads are ignored."),
+				label: __("Tags on the reader"),
+				description: __("Put the tags of all pieces of this row on the station together. A tag read twice counts once."),
 			},
 			{ fieldname: "list", fieldtype: "HTML" },
 		],
-		primary_action_label: __("Save tags"),
-		primary_action: async () => {
-			const bad = state.codes.filter((c) => state.verdicts[c] && !state.verdicts[c].ok);
-			if (bad.length) {
-				frappe.msgprint(__("Remove the tags marked red first."));
-				return;
-			}
-			frappe.model.set_value(state.row.doctype, state.row.name, "custom_rfid_tags", state.codes.join("\n"));
-			await frm.save();
-			frappe.show_alert({ message: __("{0} tags saved on row {1}", [state.codes.length, state.row.idx]), indicator: "green" });
-			d.hide();
-		},
+		primary_action_label: __("Tag now"),
+		primary_action: () => save(),
 		secondary_action_label: __("Clear reads"),
 		secondary_action: () => {
-			state.codes = [];
+			S.codes = [];
+			S.verdicts = {};
 			render();
 		},
 	});
 
-	const qtyOf = (r) => cint(r.transfer_qty || r.stock_qty || r.qty);
+	const isReady = () => {
+		const need = S.row.to_tag;
+		const checked = S.codes.every((c) => S.verdicts[c]);
+		const bad = S.codes.filter((c) => S.verdicts[c] && !S.verdicts[c].ok);
+		return need > 0 && S.codes.length === need && checked && !bad.length;
+	};
 
 	function render() {
-		const qty = qtyOf(state.row);
-		const n = state.codes.length;
-		const bad = state.codes.filter((c) => state.verdicts[c] && !state.verdicts[c].ok).length;
-		const color = n > qty || bad ? "red" : n === qty ? "green" : "orange";
-		const isSerial = rfidItems[state.row.item_code].has_serial_no;
+		const need = S.row.to_tag;
+		const n = S.codes.length;
+		const bad = S.codes.filter((c) => S.verdicts[c] && !S.verdicts[c].ok);
+		const checking = S.codes.some((c) => !S.verdicts[c]);
+		let msg = "";
+		let color = "gray";
+		if (!need) {
+			msg = __("Every piece of this row already has its tag.");
+			color = "green";
+		} else if (!n) {
+			msg = __("Put all {0} tags on the reader.", [need]);
+		} else if (bad.length) {
+			msg = __("{0} tag(s) cannot be used (red below). Take them off the reader. Nothing is tagged yet.", [bad.length]);
+			color = "red";
+		} else if (n > need) {
+			msg = __("{0} tag(s) too many: this row has {1} pieces. Take the extra tags off. Nothing is tagged yet.", [n - need, need]);
+			color = "red";
+		} else if (n < need) {
+			msg = __("{0} tag(s) missing: this row has {1} pieces. Put the rest on the reader. Nothing is tagged yet.", [need - n, need]);
+			color = "orange";
+		} else if (checking) {
+			msg = __("Checking tags...");
+		} else {
+			msg = __("{0} of {0} tags are right. Tagging...", [need]);
+			color = "green";
+		}
+		const place = S.row.direction === "transfer" ? `${S.row.from_warehouse} → ${S.row.warehouse}` : S.row.warehouse;
 		d.fields_dict.summary.$wrapper.html(`
-			<div style="display:flex;align-items:baseline;gap:12px;margin:4px 0 8px">
-				<span style="font-size:28px;font-weight:700;color:var(--${color}-600)">${n} / ${qty}</span>
-				<span class="text-muted">${__("tags read for this row")}</span>
+			<div style="display:flex;align-items:baseline;gap:12px;margin:4px 0">
+				<span style="font-size:32px;font-weight:700;color:var(--${color}-600)">${n} / ${need}</span>
+				<span class="text-muted">${esc(verb[S.row.direction])} · ${esc(place || "")}</span>
 			</div>
-			${n > qty ? `<p class="text-danger">${__("More tags than units. Take out {0} tag(s).", [n - qty])}</p>` : ""}
-			${isSerial ? `<p class="text-muted small">${__("Serial numbers are created on submit; each tag goes to the next new serial.")}</p>` : ""}`);
+			<div class="alert" style="margin:6px 0 4px;padding:8px 12px;border-radius:8px;background:var(--${color}-50);color:var(--${color}-700)">${esc(msg)}</div>`);
 		d.fields_dict.list.$wrapper.html(
-			state.codes.length
-				? `<div style="max-height:320px;overflow:auto;border:1px solid var(--border-color);border-radius:8px">${state.codes
+			n
+				? `<div style="max-height:300px;overflow:auto;border:1px solid var(--border-color);border-radius:8px">${S.codes
+						.slice()
+						.reverse()
 						.map((c) => {
-							const v = state.verdicts[c];
+							const v = S.verdicts[c];
 							const ok = !v || v.ok;
 							return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border-color)">
-								<span class="indicator-pill ${v ? (ok ? "green" : "red") : "gray"}">${frappe.utils.escape_html(c)}</span>
-								<span class="small ${ok ? "text-muted" : "text-danger"}" style="flex:1">${frappe.utils.escape_html(v ? v.message : __("Checking..."))}</span>
-								<a class="small" data-drop="${frappe.utils.escape_html(c)}">${__("Remove")}</a></div>`;
+								<span class="indicator-pill ${v ? (ok ? "green" : "red") : "gray"}">${esc(c)}</span>
+								<span class="small ${ok ? "text-muted" : "text-danger"}" style="flex:1">${esc(v ? v.message : __("Checking..."))}</span>
+								<a class="small" data-drop="${esc(c)}">${__("Remove")}</a></div>`;
 						})
 						.join("")}</div>`
-				: `<p class="text-muted">${__("No tags read yet.")}</p>`
+				: ""
 		);
+		d.get_primary_btn().prop("disabled", !isReady() || S.saving);
+		clearTimeout(S.timer);
+		// Everything right: tag by itself once the reader has been quiet for a moment.
+		if (isReady() && !S.saving) S.timer = setTimeout(() => isReady() && save(), 1200);
 	}
 
-	async function addCodes(text) {
-		const fresh = [...new Set(text.split(/[\s,]+/).map((s) => s.trim().toUpperCase()))].filter(
-			(s) => s && !state.codes.includes(s)
-		);
+	async function check(fresh) {
 		if (!fresh.length) return;
-		state.codes.push(...fresh);
-		render();
 		const r = await frappe.xcall("rfid_retail.overrides.stock.check_row_tags", {
 			doctype: frm.doctype,
 			name: frm.doc.name,
-			row: state.row.name,
+			row: S.row.row,
 			codes: fresh,
 		});
-		r.codes.forEach((v) => (state.verdicts[v.code] = v));
+		S.row = r.state;
+		r.codes.forEach((v) => (S.verdicts[v.code] = v));
 		render();
 	}
 
-	function loadRow() {
-		state.row = rows.find((r) => label(r) === d.get_value("row")) || rows[0];
-		state.codes = (state.row.custom_rfid_tags || "").split(/\s+/).filter(Boolean);
-		state.verdicts = {};
+	function add(text) {
+		const fresh = [...new Set(text.split(/[\s,]+/).map((x) => x.trim().toUpperCase()))].filter((x) => x && !S.codes.includes(x));
+		if (!fresh.length) return;
+		S.codes.push(...fresh);
 		render();
-		if (state.codes.length) recheck();
+		check(fresh);
 	}
 
-	async function recheck() {
-		const r = await frappe.xcall("rfid_retail.overrides.stock.check_row_tags", {
-			doctype: frm.doctype,
-			name: frm.doc.name,
-			row: state.row.name,
-			codes: state.codes,
-		});
-		r.codes.forEach((v) => (state.verdicts[v.code] = v));
+	async function save() {
+		if (!isReady() || S.saving) return;
+		S.saving = true;
 		render();
+		try {
+			const r = await frappe.xcall("rfid_retail.overrides.stock.assign_row_tags", {
+				doctype: frm.doctype,
+				name: frm.doc.name,
+				row: S.row.row,
+				codes: S.codes,
+			});
+			frappe.show_alert({ message: __("{0} pieces tagged on row {1}", [r.tagged, S.row.idx]), indicator: "green" }, 6);
+			rows = await frappe.xcall("rfid_retail.overrides.stock.row_tag_rows", { doctype: frm.doctype, name: frm.doc.name });
+			frm.reload_doc();
+			// This row is done: forget its reads so nothing is sent twice.
+			S.row = rows.find((x) => x.row === S.row.row) || S.row;
+			S.codes = [];
+			S.verdicts = {};
+			const next = rows.find((x) => x.to_tag);
+			if (!next) {
+				d.hide();
+				frappe.msgprint({ message: __("All RFID rows of {0} are tagged.", [frm.doc.name]), indicator: "green" });
+				return;
+			}
+			d.set_df_property("row", "options", rows.map(label));
+			S.row = next;
+			d.set_value("row", label(next));
+		} finally {
+			S.saving = false;
+			render();
+		}
+	}
+
+	function pick() {
+		const chosen = rows.find((r) => label(r) === d.get_value("row"));
+		if (chosen && chosen.row !== S.row.row) {
+			S.row = chosen;
+			S.codes = [];
+			S.verdicts = {};
+		}
+		render();
+		input.focus();
 	}
 
 	const input = d.fields_dict.read.$input;
@@ -222,23 +263,23 @@ rfid_retail.tag_dialog = async function (frm) {
 		e.preventDefault();
 		const text = input.val();
 		input.val("");
-		addCodes(text);
+		add(text);
 	});
 	input.on("paste", () =>
 		setTimeout(() => {
 			const text = input.val();
 			if (text.split(/[\s,]+/).filter(Boolean).length > 1) {
 				input.val("");
-				addCodes(text);
+				add(text);
 			}
 		}, 0)
 	);
 	d.fields_dict.list.$wrapper.on("click", "[data-drop]", (e) => {
 		const code = $(e.currentTarget).attr("data-drop");
-		state.codes = state.codes.filter((c) => c !== code);
+		S.codes = S.codes.filter((c) => c !== code);
 		render();
 	});
 	d.show();
-	loadRow();
+	render();
 	setTimeout(() => input.focus(), 300);
 };

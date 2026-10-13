@@ -272,9 +272,19 @@ def check_tags(codes, item_code=None):
 	return out
 
 
+def _exact(codes, need, item_code, warehouse):
+	"""All pieces of the item on the reader at once: the tag count must match, or nothing is tagged."""
+	if len(codes) == need:
+		return
+	diff = _("{0} too many").format(len(codes) - need) if len(codes) > need else _("{0} missing").format(
+		need - len(codes))
+	frappe.throw(_("{0} tags read for {1} pieces of {2} in {3} ({4}). Nothing was tagged.").format(
+		len(codes), need, item_code, warehouse, diff), title=_("Tag count does not match"))
+
+
 @frappe.whitelist(methods=["POST"])
 def bulk_assign(item_code, warehouse, codes, device=None):
-	"""Tag N identical units in one go. All tags are saved or none."""
+	"""Tag all N identical waiting units in one go: exactly N usable tags, or nothing is saved."""
 	require_station("Tag Mapping")
 	codes = list(dict.fromkeys(rfid.normalize(c) for c in _load(codes) if c))
 	if not codes:
@@ -295,16 +305,11 @@ def bulk_assign(item_code, warehouse, codes, device=None):
 		serials = frappe.get_all("Serial No", {"item_code": item_code, "warehouse": warehouse, "status": "Active",
 			"custom_rfid_status": rfid.PENDING}, pluck="name", order_by="creation asc")
 		serials = [s for s in serials if not rfid.active_assignment_for(serial_no=s)]
-		if len(codes) > len(serials):
-			frappe.throw(_("{0} tags read but only {1} units of {2} in {3} wait for a tag. Take out {4} tag(s).").format(
-				len(codes), len(serials), item_code, warehouse, len(codes) - len(serials)))
+		_exact(codes, len(serials), item_code, warehouse)
 		for code, serial_no in zip(codes, serials):
 			rfid.assign_tag(code, serial_no, device=device, remarks=_("Bulk tagging"))
 	else:
-		free = rfid.untagged_qty(item_code, warehouse)
-		if len(codes) > free:
-			frappe.throw(_("{0} tags read but only {1} units of {2} in {3} have no tag. Take out {4} tag(s).").format(
-				len(codes), free, item_code, warehouse, len(codes) - free))
+		_exact(codes, rfid.untagged_qty(item_code, warehouse), item_code, warehouse)
 		for code in codes:
 			rfid.assign_tag(code, item_code=item_code, warehouse=warehouse, device=device, remarks=_("Bulk tagging"))
 	return {"assigned": len(codes), "item_code": item_code, "warehouse": warehouse}

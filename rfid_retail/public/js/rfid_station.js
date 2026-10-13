@@ -247,15 +247,22 @@
 		$("mb-qty").textContent = qty;
 		document.querySelector(".bulk-count").className = `bulk-count${n > qty ? " over" : n === qty ? " full" : ""}`;
 		$("mb-bar").style.width = `${Math.min(n / qty, 1) * 100}%`;
-		const warn = n > qty
-			? `${n - qty} tag(s) too many: only ${qty} piece(s) of this item wait for a tag. Take the extra tags off the reader.`
-			: bad.length
-				? `${bad.length} tag(s) cannot be used. Take them off the reader (shown in red).`
-				: "";
+		const warn = bad.length
+			? `${bad.length} tag(s) cannot be used (red below). Take them off the reader. Nothing is tagged yet.`
+			: n > qty
+				? `${n - qty} tag(s) too many: ${qty} piece(s) of this item wait for a tag. Take the extra tags off. Nothing is tagged yet.`
+				: n && n < qty
+					? `${qty - n} tag(s) missing: put the tags of all ${qty} pieces on the reader. Nothing is tagged yet.`
+					: "";
+		const ready = n === qty && !bad.length && !checking;
 		$("mb-warn").hidden = !warn;
 		$("mb-warn").textContent = warn;
+		$("mb-warn").className = n && n < qty && !bad.length ? "warnline soft" : "warnline";
 		$("mb-ok").textContent = n ? `${n - bad.length} usable` : "";
-		$("mb-save").disabled = !n || n > qty || bad.length > 0 || checking;
+		$("mb-save").disabled = !ready || B.saving;
+		clearTimeout(B.timer);
+		// All tags right: save by itself once the reader is quiet for a moment.
+		if (ready && !B.saving) B.timer = setTimeout(() => !$("mb-save").disabled && $("mb-save").click(), 1200);
 		$("mb-save").innerHTML = `${icon("save")}Save ${n ? n : ""} tag${n === 1 ? "" : "s"}`;
 		$("mb-list").innerHTML =
 			B.codes
@@ -301,7 +308,16 @@
 	});
 	$("mb-save").addEventListener("click", async () => {
 		const g = B.group;
-		const r = await call("mapping.bulk_assign", { item_code: g.item_code, warehouse: g.warehouse, codes: B.codes });
+		if (B.saving) return;
+		B.saving = true;
+		renderBulk();
+		let r;
+		try {
+			r = await call("mapping.bulk_assign", { item_code: g.item_code, warehouse: g.warehouse, codes: B.codes });
+		} finally {
+			B.saving = false;
+			renderBulk();
+		}
 		snack(`${r.assigned} tag${r.assigned === 1 ? "" : "s"} saved on ${g.item_name}`);
 		await loadPending();
 		const next = groups.find((x) => x.kind !== "unit" && x.item_code === g.item_code && x.warehouse === g.warehouse);

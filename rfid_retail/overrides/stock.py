@@ -113,26 +113,6 @@ def _check_outgoing(row, code):
 		frappe.throw(_("Row {0}: tag {1} is recorded in {2}, not {3}.").format(row.idx, code, res.warehouse, wh))
 
 
-def before_submit(doc, method=None):
-	if not is_enabled() or doc.doctype not in TAGGED_DOCTYPES:
-		return
-	strict = cint(setting("require_tags_on_inward"))
-	for row in doc.get("items") or []:
-		if not rfid.is_rfid_item(row.item_code):
-			continue
-		way, tags = direction(doc, row), row_tags(row)
-		if way == IN and strict and not rfid.get_set_definition(row.item_code) and len(tags) < unit_qty(row):
-			frappe.throw(_("Row {0}: {1} of {2} units of {3} have a tag. Read the rest of the tags first.").format(
-				row.idx, len(tags), unit_qty(row), row.item_code))
-		if way in (OUT, TRANSFER) and not rfid.has_serial(row.item_code):
-			# Untagged units can leave without a read; every tagged unit that leaves must be read,
-			# or its tag would stay behind in a warehouse that no longer has the stock.
-			needed = unit_qty(row) - rfid.untagged_qty(row.item_code, source_warehouse(row))
-			if len(tags) < needed:
-				frappe.throw(_("Row {0}: read the tags of the {1} units of {2} leaving {3} ({4} read).").format(
-					row.idx, needed, row.item_code, source_warehouse(row), len(tags)))
-
-
 # ---------------------------------------------------------------- submit / cancel
 
 
@@ -242,27 +222,74 @@ def restore_tags(doc, actions):
 # ---------------------------------------------------------------- desk helpers
 
 
-@frappe.whitelist()
-def check_row_tags(doctype, name, row, codes):
-	"""Live check for the tag dialog: what each read code is, before the draft is saved."""
+def _row_doc(doctype, name, row):
 	from rfid_retail.settings import require_enabled
 
 	require_enabled()
-	from rfid_retail.api.pos import _load
-
+	if doctype not in TAGGED_DOCTYPES:
+		frappe.throw(_("RFID tags are read on {0}.").format(_(" / ").join(TAGGED_DOCTYPES)))
 	doc = frappe.get_doc(doctype, name)
-	doc.check_permission("write")
+	doc.check_permission("submit" if doc.meta.is_submittable else "write")
+	if doc.docstatus != 1:
+		frappe.throw(_("Submit {0} first. Tags are read for stock that has come in.").format(name))
 	child = next((r for r in doc.items if r.name == row), None)
 	if not child:
-		frappe.throw(_("Row not found. Save the document first."))
+		frappe.throw(_("Row not found."))
+	if not rfid.is_rfid_item(child.item_code):
+		frappe.throw(_("{0} is not an RFID item.").format(child.item_code))
+	if rfid.get_set_definition(child.item_code):
+		frappe.throw(_("{0} is a set. Tag its pieces one by one at the Tag garments station.").format(child.item_code))
+	return doc, child
+
+
+def _row_state(doc, row):
+	"""How many tags this row still needs, and which units they go on."""
+	way = direction(doc, row)
+	qty = unit_qty(row)
+	done = row_tags(row)
+	out = {"row": row.name, "idx": row.idx, "item_code": row.item_code, "item_name": row.item_name,
+		"direction": way, "qty": qty, "done": len(done), "warehouse": target_warehouse(row),
+		"from_warehouse": source_warehouse(row) if way != IN else None}
+	if way == IN and rfid.has_serial(row.item_code):
+		serials = [s for s in get_row_serials(row) if not rfid.active_assignment_for(serial_no=s)
+			and frappe.db.get_value("Serial No", s, "status") == "Active"]
+		out["serials"] = serials
+		out["to_tag"] = len(serials)
+	elif way == IN:
+		tagged = frappe.db.count("RFID Tag Assignment", {"source_doctype": doc.doctype, "source_name": doc.name,
+			"source_row": row.name})
+		out["to_tag"] = max(min(qty - tagged, rfid.untagged_qty(row.item_code, target_warehouse(row))), 0)
+	else:
+		out["to_tag"] = max(qty - len(done), 0)
+	return out
+
+
+@frappe.whitelist()
+def row_tag_rows(doctype, name):
+	"""RFID rows of a submitted document with what each still needs."""
+	from rfid_retail.settings import require_enabled
+
+	require_enabled()
+	doc = frappe.get_doc(doctype, name)
+	doc.check_permission("read")
+	return [_row_state(doc, r) for r in doc.items
+		if rfid.is_rfid_item(r.item_code) and not rfid.get_set_definition(r.item_code) and direction(doc, r)]
+
+
+@frappe.whitelist()
+def check_row_tags(doctype, name, row, codes):
+	"""Live verdict for each tag on the reader, before anything is saved."""
+	from rfid_retail.api.pos import _load
+
+	doc, child = _row_doc(doctype, name, row)
 	way = direction(doc, child)
 	out = []
 	for code in dict.fromkeys(rfid.normalize(c) for c in _load(codes) if c):
-		out.append({"code": code, **_code_status(doc, child, way, code)})
-	return {"qty": unit_qty(child), "item_code": child.item_code, "direction": way, "codes": out}
+		out.append({"code": code, **_code_status(child, way, code)})
+	return {"state": _row_state(doc, child), "codes": out}
 
 
-def _code_status(doc, row, way, code):
+def _code_status(row, way, code):
 	try:
 		rfid.check_tag_code(code)
 	except frappe.ValidationError as e:
@@ -274,18 +301,60 @@ def _code_status(doc, row, way, code):
 	if way == IN:
 		if not tag:
 			return {"ok": True, "message": _("New tag")}
-		if tag.status == rfid.TAG_RESERVED and tag.reserved_for == doc.name and tag.reserved_row != row.name:
-			return {"ok": False, "message": _("Already read on another row of this document")}
-		problem = rfid.tag_problem(tag, (doc.doctype, doc.name))
+		if tag.current_assignment:
+			name = frappe.get_cached_value("Item", tag.item_code, "item_name") if tag.item_code else ""
+			return {"ok": False, "message": _("Already on {0} ({1}). Take it off the reader.").format(
+				name or tag.item_code, tag.serial_no or tag.warehouse or "")}
+		problem = rfid.tag_problem(tag)
 		return {"ok": not problem, "message": problem or _("Free tag")}
-	if rfid.has_serial(row.item_code):
-		return {"ok": True, "message": _("Serial items move with their serial numbers")}
 	try:
 		_check_outgoing(row, code)
 	except frappe.ValidationError as e:
 		frappe.clear_last_message()
 		return {"ok": False, "message": str(e)}
 	return {"ok": True, "message": _("On {0}").format(row.item_code)}
+
+
+@frappe.whitelist(methods=["POST"])
+def assign_row_tags(doctype, name, row, codes):
+	"""Save the tags read for one row. Exactly the row's untagged quantity, all usable, or nothing."""
+	from rfid_retail.api.pos import _load
+
+	doc, child = _row_doc(doctype, name, row)
+	codes = list(dict.fromkeys(rfid.normalize(c) for c in _load(codes) if c))
+	state = _row_state(doc, child)
+	need = state["to_tag"]
+	if not need:
+		frappe.throw(_("Row {0}: every unit of {1} already has its tag.").format(child.idx, child.item_code))
+	if len(codes) != need:
+		more_less = _("{0} too many").format(len(codes) - need) if len(codes) > need else _("{0} missing").format(
+			need - len(codes))
+		frappe.throw(_("Row {0}: {1} tags read for {2} pieces of {3} ({4}). Nothing was tagged.").format(
+			child.idx, len(codes), need, child.item_code, more_less), title=_("Tag count does not match"))
+	bad = [(c, v["message"]) for c in codes for v in [_code_status(child, state["direction"], c)] if not v["ok"]]
+	if bad:
+		frappe.throw("<br>".join(f"<b>{frappe.utils.escape_html(c)}</b>: {frappe.utils.escape_html(m)}" for c, m in bad)
+			+ "<br>" + _("Nothing was tagged."), title=_("Some tags cannot be used"))
+	way, source = state["direction"], (doc.doctype, doc.name, child.name)
+	if way == IN and state.get("serials") is not None:
+		for code, serial_no in zip(codes, state["serials"]):
+			rfid.assign_tag(code, serial_no, source=source)
+	elif way == IN:
+		for code in codes:
+			rfid.assign_tag(code, item_code=child.item_code, warehouse=target_warehouse(child), source=source)
+	elif way == TRANSFER:
+		for code in codes:
+			_move(code, source_warehouse(child), target_warehouse(child), source)
+	else:
+		reason = "Returned To Supplier" if cint(doc.get("is_return")) else "Issued Out"
+		for code in codes:
+			rfid.close_assignment(code, reason, action="Issued Out", reference_doctype=doc.doctype,
+				reference_name=doc.name)
+	saved = row_tags(child) + codes
+	frappe.db.set_value(child.doctype, child.name, {"custom_rfid_tags": "\n".join(saved),
+		"custom_rfid_tag_count": len(saved)}, update_modified=False)
+	return {"tagged": len(codes), "state": _row_state(frappe.get_doc(doctype, name), next(
+		r for r in frappe.get_doc(doctype, name).items if r.name == row))}
 
 
 @frappe.whitelist()

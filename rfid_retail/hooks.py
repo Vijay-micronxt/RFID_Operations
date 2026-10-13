@@ -263,7 +263,6 @@ _inward_events = {
 # Documents whose rows carry the tags read for them (bulk tagging at purchase, transfers, issues)
 _tagged_stock_events = {
 	"validate": "rfid_retail.overrides.stock.validate",
-	"before_submit": "rfid_retail.overrides.stock.before_submit",
 	"on_submit": ["rfid_retail.overrides.stock.on_submit", "rfid_retail.labels.on_inward_submit"],
 	"on_cancel": "rfid_retail.overrides.stock.on_cancel",
 	"on_trash": "rfid_retail.overrides.stock.on_trash",

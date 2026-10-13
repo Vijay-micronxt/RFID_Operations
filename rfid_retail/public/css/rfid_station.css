@@ -248,6 +248,7 @@ button.item:hover { background: var(--gray-50); }
 .bulk-count > b { font-size: 40px; line-height: 1; color: var(--blue); }
 .bulk-count.full > b { color: var(--green); }
 .bulk-count.over > b { color: var(--red); }
+.warnline.soft { background: var(--amber-50); color: var(--amber); }
 .warnline { margin: 8px 0; padding: 8px 12px; border-radius: 10px; background: var(--red-50); color: var(--red); font-weight: 500; }
 .row .x { border: 0; background: none; color: var(--gray-500); cursor: pointer; padding: 4px; }
 .row .x:hover { color: var(--red); }
