@@ -2,11 +2,18 @@
 
 RFID garment identity, set billing, tag lifecycle and stock audit for ERPNext retail.
 
-Every sellable garment gets a Serial No, and every physical piece of it carries an RFID tag.
-The app knows which tag belongs to which piece, makes sure a multi-piece set (suit = jacket +
-trouser) is only billed when every piece is actually at the counter, and tracks each tag from
-inward through sale, detach, return and re-tag. A daily handheld count shows what is on the
-floor versus what ERPNext thinks is there.
+Every physical piece carries a reusable RFID tag. Items can work two ways:
+
+- **Without serial numbers** (simplest): a tag stands for one unit of the item in a warehouse.
+  Identical pieces (same style, colour, size) are tagged in bulk: put all their tags on the
+  reader at once, any tag on any piece. ERPNext keeps the quantity; the tags only add up to it.
+- **With serial numbers**: each unit also has a Serial No (created automatically from the item's
+  Serial No Series) and the tag points at that unit; multi-piece sets (suit = jacket + trouser)
+  are only billed when every piece is at the counter.
+
+The app tracks each tag from purchase through sale, reuse, transfer, return, damage and loss,
+and keeps the complete history of every tag. A daily handheld count shows what is on the floor
+versus what ERPNext thinks is there.
 
 Works with standard ERPNext Sales / POS Invoices. When [POS Next](#pos-next-integration) is
 installed it adds an RFID tray to the POS Next sale screen.
@@ -33,11 +40,28 @@ installed it adds an RFID tray to the POS Next sale screen.
 - On submit of a Purchase Receipt, Purchase Invoice, Stock Entry or Stock Reconciliation, each
   inward serial of a set gets its `Garment Component` rows (`<serial>-JKT`, `<serial>-TRS`, ...)
   created automatically.
-- `RFID Tag` with status (Available, Assigned, Sold - Pending Detach, Hold, Damaged, Retired) and
-  a full `RFID Tag Assignment` history.
+- `RFID Tag` with status (Available, Reserved, Assigned, Sold - Pending Detach, Hold, Damaged,
+  Lost, Retired), warehouse and times used. One `RFID Tag Assignment` per use of the tag: which
+  garment, tagged on which document, sold on which invoice, at what price, by whom.
+- `RFID Tag Event`: append-only history of every change and every refused read (tagged, sold,
+  freed, moved, returned, replaced, damaged, lost, found, exit alarm, rejected at the counter).
 
-**Tag mapping and repair**
-- Guided tagging screen: pending units list, scan a tag, bind it to a serial or a set piece.
+**Tagging at purchase**
+- `RFID Tags` button on a draft Purchase Invoice (Update Stock), Purchase Receipt or Stock Entry:
+  pick the row, put all tags of that item on the reader, each tag is checked live and the row
+  keeps the list. Count must not exceed the quantity.
+- Draft save reserves the tags; submit puts them on the new units (on the new serials for serial
+  items); deleting the draft frees them. Optional rule: every unit tagged before submit.
+- Material Issue / purchase return free the tags read on the row; Material Transfer moves them;
+  cancel undoes it, or flags the unit for a new tag when the tag was reused meanwhile.
+
+**Tag garments station**
+- What waits for tags, grouped by item and warehouse (untagged stock, new serials); sets and
+  customer returns one garment at a time.
+- Scan the item barcode, read all its tags at once, save. Wrong, used, lost or extra tags are
+  shown in red and block the save.
+- Tag history tab: read a tag or scan a label to see every garment it was on, who tagged and
+  sold it and for how much; mark it damaged (and put a new tag), lost, found or retired.
 - Replace a damaged tag (old tag retired, history kept).
 - Detach after sale, customer return check before a returned unit is re-tagged, send a piece out
   for alteration and back.
@@ -46,8 +70,11 @@ installed it adds an RFID tray to the POS Next sale screen.
 - `RFID Basket` per counter: tray reads are added to the basket, one line per sellable unit with
   each piece shown as verified or missing.
 - A set cannot be billed until every piece is read. A unit cannot sit on two counters at once.
-- Checkout creates the Sales Invoice, marks serials Sold and tags Sold - Pending Detach; retrying
-  a billed basket returns the same invoice. Customer lookup / create by mobile and loyalty points.
+- Checkout creates the Sales Invoice; the invoice row keeps the exact tags sold. Tags are freed
+  for reuse as soon as the bill is submitted, or kept on the garment until it passes the detach
+  station (RFID Settings > After A Sale). A failed payment or submit never frees a tag.
+  Retrying a billed basket returns the same invoice. Customer lookup / create by mobile and
+  loyalty points.
 - The same rules are enforced in `Sales Invoice` / `POS Invoice` `before_submit`, so a desk
   invoice or any other frontend cannot bypass them. Cancel and return reverse the status.
 
