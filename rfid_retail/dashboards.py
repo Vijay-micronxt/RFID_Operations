@@ -20,6 +20,7 @@ def item(data):
 		"Garment Component": "item_code",
 		"RFID Tag": "item_code",
 		"RFID Tag Assignment": "item_code",
+		"RFID Tag Event": "item_code",
 	})
 
 
@@ -28,6 +29,7 @@ def serial_no(data):
 		"Garment Component": None,
 		"RFID Tag": None,
 		"RFID Tag Assignment": None,
+		"RFID Tag Event": None,
 		"RFID Exception": None,
 	})
 
@@ -36,6 +38,7 @@ def sales_invoice(data):
 	return _add(data, "sales_invoice", {
 		"RFID Basket": None,
 		"RFID Tag Assignment": None,
+		"RFID Tag Event": "reference_name",
 		"Garment Component": None,
 	})
 

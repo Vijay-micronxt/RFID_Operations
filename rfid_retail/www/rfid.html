@@ -8,10 +8,10 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
-	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=10">
+	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=11">
 </head>
 <body>
-{% set labels = {"mapping": ["sell", "Tag garments"], "detach": ["content_cut", "Remove tags"], "gate": ["door_open", "Exit gate"], "audit": ["inventory", "Stock count"]} %}
+{% set labels = {"mapping": ["sell", "Tag garments"], "history": ["history", "Tag history"], "detach": ["content_cut", "Remove tags"], "gate": ["door_open", "Exit gate"], "audit": ["inventory", "Stock count"]} %}
 <header class="top">
 	<div class="brand">
 		<span class="logo"><span class="ms">sensors</span></span>
@@ -49,12 +49,12 @@
 <section class="screen split" data-screen="mapping">
 	<aside class="panel">
 		<div class="panel-head">
-			<h2>Garments to tag</h2>
+			<h2>To tag</h2>
 			<span class="count" id="m-count">0</span>
 		</div>
 		<div class="scan">
 			<span class="ms">qr_code_scanner</span>
-			<input id="m-code" autocomplete="off" placeholder="Scan or type garment label">
+			<input id="m-code" autocomplete="off" placeholder="Scan item barcode or garment label">
 		</div>
 		<div class="list scroll" id="m-pending"></div>
 	</aside>
@@ -62,8 +62,36 @@
 	<section class="panel work">
 		<div class="placeholder" id="m-empty">
 			<span class="ms">touch_app</span>
-			<h3>Pick a garment</h3>
-			<p>Choose one from the list, or scan its label (for example SUIT-000001).</p>
+			<h3>Pick an item</h3>
+			<p>Identical pieces (same item, colour and size) are tagged together: pick the item, put all its tags on the reader and save.</p>
+			<p class="muted small" style="margin-top:8px">Sets and customer returns are tagged one garment at a time.</p>
+		</div>
+
+		<div id="m-bulk" hidden>
+			<div class="work-head">
+				<div>
+					<h2 id="mb-name"></h2>
+					<p class="muted" id="mb-meta"></p>
+				</div>
+				<span class="badge" id="mb-badge"></span>
+			</div>
+			<div class="bulk-count"><b id="mb-n">0</b><span>of <b id="mb-qty">0</b> pieces have a tag read</span></div>
+			<div class="progress"><span id="mb-bar"></span></div>
+
+			<div class="callout" id="mb-now">
+				<p class="eyebrow">Put this item's tags on the reader</p>
+				<input id="mb-read" class="field-lg" autocomplete="off" placeholder="Tags appear here as they are read">
+				<p class="muted small">Only tags of this item. A tag read twice counts once. Then stick one tag on each piece, any order.</p>
+			</div>
+			<p class="warnline" id="mb-warn" hidden></p>
+
+			<h3 class="label">Tags read <span class="muted" id="mb-ok"></span></h3>
+			<div class="list" id="mb-list"></div>
+			<div class="buttons">
+				<button class="btn primary" id="mb-save" disabled><span class="ms">save</span>Save tags</button>
+				<button class="btn ghost" id="mb-clear"><span class="ms">backspace</span>Clear reads</button>
+				<button class="btn text" id="mb-close"><span class="ms">close</span>Done</button>
+			</div>
 		</div>
 
 		<div id="m-tagging" hidden>
@@ -103,6 +131,23 @@
 				<button class="btn primary" id="m-next"><span class="ms">arrow_forward</span>Next garment</button>
 			</div>
 		</div>
+	</section>
+</section>
+
+<!-- ================================================================ TAG HISTORY -->
+<section class="screen split" data-screen="history">
+	<aside class="panel">
+		<div class="panel-head"><h2>Tag history</h2></div>
+		<p class="muted">Read a tag or scan a garment label to see every garment the tag was on, who sold it and for how much.</p>
+		<div class="scan">
+			<span class="ms">nfc</span>
+			<input id="h-code" autocomplete="off" placeholder="Read tag or scan label">
+		</div>
+		<div id="h-card"></div>
+	</aside>
+	<section class="panel work" id="h-out">
+		<div class="placeholder"><span class="ms">history</span><h3>Nothing selected</h3>
+			<p>The full story of a tag shows here: tagged, sold, freed, moved, damaged or lost, with the user and the document.</p></div>
 	</section>
 </section>
 
@@ -193,6 +238,6 @@
 		tabs: {{ tabs | tojson }}
 	};
 </script>
-<script src="/assets/rfid_retail/js/rfid_station.js?v=10"></script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=11"></script>
 </body>
 </html>

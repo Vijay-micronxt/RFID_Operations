@@ -426,8 +426,11 @@ def log_event(tag, action, **fields):
 	doc = frappe.get_doc({"doctype": "RFID Tag Event", "tag": tag, "action": action, "event_time": now_datetime(),
 		"performed_by": fields.pop("performed_by", None) or frappe.session.user,
 		**{k: v for k, v in fields.items() if v not in (None, "")}})
-	# History must never block the action it records (e.g. a draft that is not saved yet).
+	# History must never block the action it records (e.g. a draft that is not saved yet),
+	# so links are not validated - which also skips fetch_from.
 	doc.flags.ignore_links = True
+	if doc.item_code and not doc.item_name:
+		doc.item_name = frappe.get_cached_value("Item", doc.item_code, "item_name")
 	doc.insert(ignore_permissions=True)
 	return doc.name
 
