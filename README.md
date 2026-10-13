@@ -190,13 +190,13 @@ sequenceDiagram
 
 Without `rfid_retail` (or with RFID switched off) POS Next behaves exactly as before.
 
-POS Next with RFID mode: [tushar-git26/POSNext, branch `feat/rfid-mode`](https://github.com/tushar-git26/POSNext/tree/feat/rfid-mode).
+POS Next with RFID mode: [Vijay-micronxt/POSNext, branch `feat/rfid-mode`](https://github.com/Vijay-micronxt/POSNext/tree/feat/rfid-mode).
 
 ### Installation
 
 ```bash
 cd $PATH_TO_YOUR_BENCH
-bench get-app https://github.com/tushar-git26/rfid_retail --branch main
+bench get-app https://github.com/Vijay-micronxt/RFID_Operations --branch main   # installs as rfid_retail
 bench --site <site> install-app rfid_retail
 ```
 
