@@ -281,7 +281,7 @@ doc_events = {
 	},
 }
 
-app_include_js = "/assets/rfid_retail/js/rfid_retail_desk.js"
+app_include_js = "rfid_retail_desk.bundle.js"
 doctype_list_js = {
 	"Item": "public/js/item_list.js",
 	"Serial No": "public/js/serial_no_list.js",
