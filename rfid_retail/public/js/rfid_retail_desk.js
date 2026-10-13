@@ -1,19 +1,43 @@
 // Desk helpers for item codes and labels. Both work with RFID switched off.
 frappe.provide("rfid_retail");
 
-rfid_retail.print_label_job = function (job) {
-	const format = (frappe.boot.rfid_retail || {}).label_print_format || "Retail Barcode Label";
-	const params = new URLSearchParams({
-		doctype: "Label Print Job",
-		name: job,
-		format: format,
-		no_letterhead: 1,
-		trigger_print: 1,
+rfid_retail.print_label_job = async function (job) {
+	const doc = await frappe.db.get_value("Label Print Job", job, "total_labels");
+	if (!cint(doc.message && doc.message.total_labels)) {
+		frappe.msgprint(__("Enter how many stickers to print (Copies) on at least one row, then save."));
+		return;
+	}
+	const fallback = (frappe.boot.rfid_retail || {}).label_print_format || "Retail Barcode Label";
+	const formats = await frappe.db.get_list("Print Format", {
+		filters: { doc_type: "Label Print Job", disabled: 0 },
+		pluck: "name",
 	});
-	window.open(`/printview?${params}`, "_blank");
-	frappe.xcall("rfid_retail.labels.mark_printed", { job }).then(() => {
-		if (cur_frm && cur_frm.doc.name === job) cur_frm.reload_doc();
-	});
+	const open = (format) => {
+		const params = new URLSearchParams({
+			doctype: "Label Print Job",
+			name: job,
+			format,
+			no_letterhead: 1,
+			trigger_print: 1,
+		});
+		window.open(`/printview?${params}`, "_blank");
+		frappe.xcall("rfid_retail.labels.mark_printed", { job }).then(() => {
+			if (cur_frm && cur_frm.doc.name === job) cur_frm.reload_doc();
+		});
+	};
+	if (formats.length < 2) return open(fallback);
+	frappe.prompt(
+		{
+			fieldname: "format",
+			fieldtype: "Select",
+			label: __("Sticker layout"),
+			options: formats,
+			default: formats.includes(fallback) ? fallback : formats[0],
+		},
+		({ format }) => open(format),
+		__("Print Labels"),
+		__("Print")
+	);
 };
 
 rfid_retail.open_label_job = function (method, args) {

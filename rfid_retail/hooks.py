@@ -292,6 +292,7 @@ extend_bootinfo = "rfid_retail.boot.extend_bootinfo"
 jinja = {
 	"methods": [
 		"rfid_retail.labels.barcode_svg",
+		"rfid_retail.labels.qr_svg",
 		"rfid_retail.labels.label_context",
 		"rfid_retail.printing.invoice_context",
 	],

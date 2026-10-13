@@ -104,6 +104,14 @@ installed it adds an RFID tray to the POS Next sale screen.
   The Billing tile opens POS Next.
 - RFID sections on the Item, Serial No, Sales Invoice, POS Profile and Warehouse dashboards.
 
+**Stickers from received stock**
+- `Print Labels` on a submitted Purchase Invoice / Purchase Receipt / Stock Entry opens a `Label
+  Print Job` with the items filled in. Copies are typed by hand (or taken from the received
+  quantity, RFID Settings > Label Copies From A Document); serial items get one label per piece.
+- Layouts: `Retail Barcode Label` (size from settings) and `Item Sticker 80x30` (QR, ID, name,
+  size / series / finish when the item has those fields, MRP). The QR code is drawn locally,
+  no internet needed. The print button asks which layout to use.
+
 **Item codes** (`RFID Settings > Item Codes`, own switch, works with RFID off)
 - Build item codes and names from patterns, e.g. `{supplier_code}-{item_name}` and
   `{template}-{attr_abbrs}` for variants: `ZOD-FORMAL-SHIRT-RED-40`, "Formal Shirt Red 40".

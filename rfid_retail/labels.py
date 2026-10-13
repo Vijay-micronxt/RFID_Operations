@@ -128,6 +128,32 @@ def barcode_svg(value, height="100%"):
 	)
 
 
+def qr_svg(value, size="100%"):
+	"""Jinja: QR code as inline SVG (no internet needed, unlike a QR web service)."""
+	import pyqrcode
+
+	value = (value or "").strip()
+	if not value:
+		return ""
+	matrix = pyqrcode.create(value, error="M").code
+	n = len(matrix)
+	cells = "".join(
+		f'<rect x="{x}" y="{y}" width="1" height="1"/>'
+		for y, line in enumerate(matrix)
+		for x, bit in enumerate(line)
+		if bit
+	)
+	return (
+		f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 {n + 4} {n + 4}" '
+		f'style="width:{size};height:{size};display:block" shape-rendering="crispEdges">{cells}</svg>'
+	)
+
+
+def manual_copies():
+	"""RFID Settings: copies of non-serial items are typed by the user instead of taken from the document."""
+	return (get_settings().label_copies or "").startswith("Enter")
+
+
 def label_context(doc):
 	"""Jinja: settings plus one entry per physical label for a Label Print Job."""
 	settings = get_settings()
@@ -217,7 +243,7 @@ def rows_for_unit(item_code, serial_no=None, qty=1, with_components=None):
 	if with_components is None:
 		with_components = cint(get_settings().component_labels)
 	if not serial_no:
-		return [{"item_code": item_code, "copies": max(cint(qty), 0)}]
+		return [{"item_code": item_code, "copies": 0 if manual_copies() else max(cint(qty), 0)}]
 	rows = [{"item_code": item_code, "serial_no": serial_no, "copies": 1}]
 	if with_components:
 		for comp in frappe.get_all("Garment Component", filters={"serial_no": serial_no}, pluck="name",
