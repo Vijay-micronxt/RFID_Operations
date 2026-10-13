@@ -4,5 +4,5 @@
 from frappe.model.document import Document
 
 
-class LabelPrintItem(Document):
+class StickerPrintJobItem(Document):
 	pass

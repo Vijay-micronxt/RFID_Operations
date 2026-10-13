@@ -273,7 +273,7 @@ doc_events = {
 	"Sales Invoice": _rfid_invoice_events,
 	"POS Invoice": _rfid_invoice_events,
 	"Purchase Receipt": _tagged_stock_events,
-	"Purchase Invoice": _tagged_stock_events,
+	"Purchase Invoice": _inward_events,
 	"Stock Entry": _tagged_stock_events,
 	"Stock Reconciliation": _inward_events,
 	# item codes and barcodes: own switches, independent of RFID

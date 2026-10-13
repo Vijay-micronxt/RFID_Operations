@@ -290,7 +290,7 @@
    "default": "0",
    "fieldname": "auto_label_job",
    "fieldtype": "Check",
-   "label": "Prepare a Label Print Job when stock is received",
+   "label": "Prepare a Sticker Print Job when stock is received",
    "description": "Purchase Receipt, Purchase Invoice with Update Stock, and Stock Entry receipts."
   },
   {

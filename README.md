@@ -47,7 +47,7 @@ installed it adds an RFID tray to the POS Next sale screen.
   freed, moved, returned, replaced, damaged, lost, found, exit alarm, rejected at the counter).
 
 **Tagging at purchase**
-- `RFID Tags` button on a draft Purchase Invoice (Update Stock), Purchase Receipt or Stock Entry:
+- `RFID Tags` button on a draft Purchase Receipt or Stock Entry (where stock comes in or moves):
   pick the row, put all tags of that item on the reader, each tag is checked live and the row
   keeps the list. Count must not exceed the quantity.
 - Draft save reserves the tags; submit puts them on the new units (on the new serials for serial
@@ -105,8 +105,8 @@ installed it adds an RFID tray to the POS Next sale screen.
 - RFID sections on the Item, Serial No, Sales Invoice, POS Profile and Warehouse dashboards.
 
 **Stickers from received stock**
-- `Print Labels` on a submitted Purchase Invoice / Purchase Receipt / Stock Entry opens a `Label
-  Print Job` with the items filled in. Copies are typed by hand (or taken from the received
+- `Print Stickers` on a submitted Purchase Invoice / Purchase Receipt / Stock Entry opens a
+  `Sticker Print Job` with the items filled in. Copies are typed by hand (or taken from the received
   quantity, RFID Settings > Label Copies From A Document); serial items get one label per piece.
 - Layouts: `Retail Barcode Label` (size from settings) and `Item Sticker 80x30` (QR, ID, name,
   size / series / finish when the item has those fields, MRP). The QR code is drawn locally,
@@ -126,8 +126,8 @@ installed it adds an RFID tray to the POS Next sale screen.
 **Barcodes and labels** (`RFID Settings > Barcodes & Labels`, own switch, works with RFID off)
 - Every new stock item gets a barcode: EAN-13 with check digit (in-store `2x` range or your GS1
   prefix), a plain number, or the item code. Items that already carry a supplier barcode keep it.
-- `Label Print Job`: one row per label source, with copies. Built from a Purchase Receipt,
-  Purchase Invoice with Update Stock, Stock Entry or Stock Reconciliation (`Print Labels` button),
+- `Sticker Print Job`: one row per label source, with copies. Built from a Purchase Receipt,
+  Purchase Invoice with Update Stock, Stock Entry or Stock Reconciliation (`Print Stickers` button),
   from selected Items or Serial Nos (list action), or from stock on hand in a warehouse.
   Optionally created automatically whenever stock is received.
 - What a label encodes: a serial-tracked unit prints its Serial No (one label per piece), a set

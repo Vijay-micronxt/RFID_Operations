@@ -1,10 +1,10 @@
 // Copyright (c) 2026, MicroNXT Solutions Pvt. Ltd. and contributors
 // For license information, please see license.txt
 
-frappe.ui.form.on("Label Print Job", {
+frappe.ui.form.on("Sticker Print Job", {
 	refresh(frm) {
 		if (frm.is_new()) return;
-		frm.add_custom_button(__("Print Labels"), () => rfid_retail.print_label_job(frm.doc.name)).addClass("btn-primary");
+		frm.add_custom_button(__("Print Stickers"), () => rfid_retail.print_label_job(frm.doc.name)).addClass("btn-primary");
 		frm.add_custom_button(__("From Document"), () => add_from_document(frm), __("Add Labels"));
 		frm.add_custom_button(__("From Stock"), () => add_from_stock(frm), __("Add Labels"));
 	},

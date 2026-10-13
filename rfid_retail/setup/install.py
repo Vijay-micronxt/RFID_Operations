@@ -103,7 +103,6 @@ def get_custom_fields():
 			"no_copy": 1, "insert_after": "custom_rfid_tags"},
 	]
 	return {
-		"Purchase Invoice Item": row_tags,
 		"Purchase Receipt Item": row_tags,
 		"Stock Entry Detail": row_tags,
 		"Item": [

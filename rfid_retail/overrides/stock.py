@@ -1,7 +1,7 @@
 """Stock documents and RFID tags.
 
-Purchase Invoice (Update Stock), Purchase Receipt and Stock Entry rows carry the
-tags read for them in `custom_rfid_tags`, usually by bulk-reading every tag of
+Purchase Receipt and Stock Entry rows (where stock comes in, goes out or moves)
+carry the tags read for them in `custom_rfid_tags`, usually by bulk-reading every tag of
 one item at the station (identical units, so which tag goes on which piece does
 not matter).
 
@@ -23,7 +23,7 @@ from rfid_retail import rfid
 from rfid_retail.settings import get as setting, is_enabled, require_station
 from rfid_retail.overrides.sales_invoice import get_row_serials
 
-TAGGED_DOCTYPES = ("Purchase Receipt", "Purchase Invoice", "Stock Entry")
+TAGGED_DOCTYPES = ("Purchase Receipt", "Stock Entry")
 IN, OUT, TRANSFER = "in", "out", "transfer"
 
 

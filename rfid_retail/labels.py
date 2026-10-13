@@ -155,7 +155,7 @@ def manual_copies():
 
 
 def label_context(doc):
-	"""Jinja: settings plus one entry per physical label for a Label Print Job."""
+	"""Jinja: settings plus one entry per physical label for a Sticker Print Job."""
 	settings = get_settings()
 	labels = []
 	for row in doc.items:
@@ -213,7 +213,7 @@ def item_details(item_code):
 
 
 def fill_row(row, price_list=None):
-	"""Complete a Label Print Item from whatever identifies it."""
+	"""Complete a Sticker Print Job Item from whatever identifies it."""
 	if row.component and not row.serial_no:
 		row.serial_no = frappe.db.get_value("Garment Component", row.component, "serial_no")
 	if row.serial_no and not row.item_code:
@@ -307,7 +307,7 @@ def in_group(group, parent):
 def make_job(rows, source_doctype=None, source_name=None, company=None):
 	if not rows:
 		frappe.throw(_("Nothing to label: no stock items found."))
-	job = frappe.new_doc("Label Print Job")
+	job = frappe.new_doc("Sticker Print Job")
 	job.source_doctype = source_doctype
 	job.source_name = source_name
 	job.company = company or frappe.defaults.get_user_default("Company")
@@ -342,7 +342,7 @@ def on_inward_submit(doc, method=None):
 
 
 def _check_create():
-	if not frappe.has_permission("Label Print Job", "create"):
+	if not frappe.has_permission("Sticker Print Job", "create"):
 		frappe.throw(_("Not permitted to create label print jobs."), frappe.PermissionError)
 
 
@@ -352,7 +352,7 @@ def make_from_document(source_doctype, source_name):
 	if source_doctype not in INWARD_DOCTYPES:
 		frappe.throw(_("Labels can be made from {0}.").format(", ".join(INWARD_DOCTYPES)))
 	frappe.has_permission(source_doctype, "read", source_name, throw=True)
-	existing = frappe.db.get_value("Label Print Job",
+	existing = frappe.db.get_value("Sticker Print Job",
 		{"source_doctype": source_doctype, "source_name": source_name, "status": "Draft"}, "name")
 	if existing:
 		return existing
@@ -386,8 +386,8 @@ def make_from_serials(serials):
 
 @frappe.whitelist()
 def add_rows(job, source_doctype=None, source_name=None, warehouse=None, item_group=None, item_code=None):
-	"""Label Print Job form: append rows from a document or from current stock."""
-	doc = frappe.get_doc("Label Print Job", job)
+	"""Sticker Print Job form: append rows from a document or from current stock."""
+	doc = frappe.get_doc("Sticker Print Job", job)
 	doc.check_permission("write")
 	if source_doctype and source_name:
 		frappe.has_permission(source_doctype, "read", source_name, throw=True)
@@ -404,7 +404,7 @@ def add_rows(job, source_doctype=None, source_name=None, warehouse=None, item_gr
 
 @frappe.whitelist()
 def mark_printed(job):
-	doc = frappe.get_doc("Label Print Job", job)
+	doc = frappe.get_doc("Sticker Print Job", job)
 	doc.check_permission("write")
 	doc.db_set({"status": "Printed", "printed_count": cint(doc.printed_count) + 1})
 	return doc.printed_count

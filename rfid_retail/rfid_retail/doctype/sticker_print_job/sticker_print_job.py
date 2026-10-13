@@ -5,7 +5,7 @@ from frappe.model.document import Document
 from frappe.utils import cint
 
 
-class LabelPrintJob(Document):
+class StickerPrintJob(Document):
 	def validate(self):
 		from rfid_retail.labels import fill_row, label_price_list
 

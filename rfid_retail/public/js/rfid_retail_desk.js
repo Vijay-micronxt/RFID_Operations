@@ -2,19 +2,19 @@
 frappe.provide("rfid_retail");
 
 rfid_retail.print_label_job = async function (job) {
-	const doc = await frappe.db.get_value("Label Print Job", job, "total_labels");
+	const doc = await frappe.db.get_value("Sticker Print Job", job, "total_labels");
 	if (!cint(doc.message && doc.message.total_labels)) {
 		frappe.msgprint(__("Enter how many stickers to print (Copies) on at least one row, then save."));
 		return;
 	}
 	const fallback = (frappe.boot.rfid_retail || {}).label_print_format || "Retail Barcode Label";
 	const formats = await frappe.db.get_list("Print Format", {
-		filters: { doc_type: "Label Print Job", disabled: 0 },
+		filters: { doc_type: "Sticker Print Job", disabled: 0 },
 		pluck: "name",
 	});
 	const open = (format) => {
 		const params = new URLSearchParams({
-			doctype: "Label Print Job",
+			doctype: "Sticker Print Job",
 			name: job,
 			format,
 			no_letterhead: 1,
@@ -35,25 +35,31 @@ rfid_retail.print_label_job = async function (job) {
 			default: formats.includes(fallback) ? fallback : formats[0],
 		},
 		({ format }) => open(format),
-		__("Print Labels"),
+		__("Print Stickers"),
 		__("Print")
 	);
 };
 
 rfid_retail.open_label_job = function (method, args) {
 	frappe.call({ method, args, freeze: true, freeze_message: __("Preparing labels...") }).then((r) => {
-		if (r.message) frappe.set_route("Form", "Label Print Job", r.message);
+		if (r.message) frappe.set_route("Form", "Sticker Print Job", r.message);
 	});
 };
 
-// Print Labels on received stock
+// Print Stickers on received stock
 ["Purchase Receipt", "Purchase Invoice", "Stock Entry", "Stock Reconciliation"].forEach((doctype) => {
 	frappe.ui.form.on(doctype, {
 		refresh(frm) {
-			if (frm.doc.docstatus !== 1 || frm.doc.is_return) return;
+			if (frm.doc.docstatus === 2 || frm.doc.is_return) return;
 			if (doctype === "Purchase Invoice" && !frm.doc.update_stock) return;
-			if (!frappe.model.can_create("Label Print Job")) return;
-			frm.add_custom_button(__("Print Labels"), () =>
+			if (!frappe.model.can_create("Sticker Print Job")) return;
+			if (frm.doc.docstatus === 0) {
+				frm.add_custom_button(__("Print Stickers"), () =>
+					frappe.msgprint(__("Submit first: stickers are made for the stock this document brings in."))
+				);
+				return;
+			}
+			frm.add_custom_button(__("Print Stickers"), () =>
 				rfid_retail.open_label_job("rfid_retail.labels.make_from_document", {
 					source_doctype: frm.doctype,
 					source_name: frm.doc.name,
@@ -81,13 +87,13 @@ rfid_retail.toggle_item_code = function (frm) {
 
 // ------------------------------------------------------------ RFID tags on stock rows
 // Put all tags of one row's item on the reader at once; each read code lands in the list.
-const RFID_TAG_DOCTYPES = ["Purchase Receipt", "Purchase Invoice", "Stock Entry"];
+// Stock arrives through a Purchase Receipt or a Stock Entry; that is where the tags are read.
+const RFID_TAG_DOCTYPES = ["Purchase Receipt", "Stock Entry"];
 
 RFID_TAG_DOCTYPES.forEach((doctype) => {
 	frappe.ui.form.on(doctype, {
 		refresh(frm) {
 			if (!(frappe.boot.rfid_retail || {}).enabled || frm.doc.docstatus !== 0) return;
-			if (doctype === "Purchase Invoice" && !frm.doc.update_stock) return;
 			frm.add_custom_button(__("RFID Tags"), () => rfid_retail.tag_dialog(frm));
 		},
 	});
