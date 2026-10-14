@@ -133,7 +133,10 @@ rfid_retail.tag_dialog = async function (frm) {
 		const need = S.row.to_tag;
 		const checked = S.codes.every((c) => S.verdicts[c]);
 		const bad = S.codes.filter((c) => S.verdicts[c] && !S.verdicts[c].ok);
-		return need > 0 && S.codes.length === need && checked && !bad.length;
+		// Incoming stock can be tagged in part; moving or sending out needs every unit's tag.
+		const n = S.codes.length;
+		const enough = S.row.direction === "in" ? n > 0 && n <= need : n === need;
+		return need > 0 && enough && checked && !bad.length;
 	};
 
 	function render() {
@@ -154,6 +157,9 @@ rfid_retail.tag_dialog = async function (frm) {
 		} else if (n > need) {
 			msg = __("{0} tag(s) too many: this row has {1} pieces. Take the extra tags off. Nothing is tagged yet.", [n - need, need]);
 			color = "red";
+		} else if (n < need && S.row.direction === "in") {
+			msg = __("{0} of {1} pieces will be tagged; {2} stay untagged for later. Put more tags on the reader, or press Tag now.", [n, need, need - n]);
+			color = "orange";
 		} else if (n < need) {
 			msg = __("{0} tag(s) missing: this row has {1} pieces. Put the rest on the reader. Nothing is tagged yet.", [need - n, need]);
 			color = "orange";
@@ -189,7 +195,7 @@ rfid_retail.tag_dialog = async function (frm) {
 		d.get_primary_btn().prop("disabled", !isReady() || S.saving);
 		clearTimeout(S.timer);
 		// Everything right: tag by itself once the reader has been quiet for a moment.
-		if (isReady() && !S.saving) S.timer = setTimeout(() => isReady() && save(), 1200);
+		if (isReady() && S.codes.length === need && !S.saving) S.timer = setTimeout(() => isReady() && save(), 1200);
 	}
 
 	async function check(fresh) {

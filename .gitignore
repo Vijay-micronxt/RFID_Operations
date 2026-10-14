@@ -2,3 +2,4 @@
 __pycache__/
 *.egg-info
 node_modules
+rfid_retail/public/dist/
