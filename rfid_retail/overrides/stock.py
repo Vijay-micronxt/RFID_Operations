@@ -317,7 +317,8 @@ def _code_status(row, way, code):
 
 @frappe.whitelist(methods=["POST"])
 def assign_row_tags(doctype, name, row, codes):
-	"""Save the tags read for one row. Exactly the row's untagged quantity, all usable, or nothing."""
+	"""Save the tags read for one row, all usable, or nothing. Incoming stock may be tagged in part
+	(the rest stays untagged); moving or sending stock out needs the tag of every unit."""
 	from rfid_retail.api.pos import _load
 
 	doc, child = _row_doc(doctype, name, row)
@@ -326,7 +327,7 @@ def assign_row_tags(doctype, name, row, codes):
 	need = state["to_tag"]
 	if not need:
 		frappe.throw(_("Row {0}: every unit of {1} already has its tag.").format(child.idx, child.item_code))
-	if len(codes) != need:
+	if len(codes) > need or (len(codes) < need and state["direction"] != IN):
 		more_less = _("{0} too many").format(len(codes) - need) if len(codes) > need else _("{0} missing").format(
 			need - len(codes))
 		frappe.throw(_("Row {0}: {1} tags read for {2} pieces of {3} ({4}). Nothing was tagged.").format(

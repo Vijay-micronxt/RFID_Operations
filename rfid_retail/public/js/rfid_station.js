@@ -252,17 +252,17 @@
 			: n > qty
 				? `${n - qty} tag(s) too many: ${qty} piece(s) of this item wait for a tag. Take the extra tags off. Nothing is tagged yet.`
 				: n && n < qty
-					? `${qty - n} tag(s) missing: put the tags of all ${qty} pieces on the reader. Nothing is tagged yet.`
+					? `${n} of ${qty} pieces will be tagged; ${qty - n} stay untagged for later. Put more tags on the reader, or press Save.`
 					: "";
-		const ready = n === qty && !bad.length && !checking;
+		const ready = n > 0 && n <= qty && !bad.length && !checking;
 		$("mb-warn").hidden = !warn;
 		$("mb-warn").textContent = warn;
 		$("mb-warn").className = n && n < qty && !bad.length ? "warnline soft" : "warnline";
 		$("mb-ok").textContent = n ? `${n - bad.length} usable` : "";
 		$("mb-save").disabled = !ready || B.saving;
 		clearTimeout(B.timer);
-		// All tags right: save by itself once the reader is quiet for a moment.
-		if (ready && !B.saving) B.timer = setTimeout(() => !$("mb-save").disabled && $("mb-save").click(), 1200);
+		// All tags right: save by itself once the reader is quiet for a moment. Fewer tags wait for Save.
+		if (ready && n === qty && !B.saving) B.timer = setTimeout(() => !$("mb-save").disabled && $("mb-save").click(), 1200);
 		$("mb-save").innerHTML = `${icon("save")}Save ${n ? n : ""} tag${n === 1 ? "" : "s"}`;
 		$("mb-list").innerHTML =
 			B.codes
