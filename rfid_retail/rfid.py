@@ -385,6 +385,37 @@ def set_tag_condition(epc, status, reason, device=None):
 	return frappe.get_doc("RFID Tag", tag.name)
 
 
+def remove_unsold_tag(epc, reason, device=None):
+	"""Take a good tag off a garment that was not sold, so it can go on another one.
+
+	The garment stays in stock and goes back to the to-tag list. Every removal is
+	written to the history and raised as an exception, so a manager can see who
+	took tags off unpaid stock and why.
+	"""
+	if not (reason or "").strip():
+		frappe.throw(_("Write why the tag is removed (for example: item not for sale, wrong item tagged)."))
+	tag = frappe.get_doc("RFID Tag", normalize(epc), for_update=True)
+	if tag.status == TAG_SOLD:
+		frappe.throw(_("Tag {0} is on a sold item. Remove it on the Remove tags screen.").format(tag.name))
+	if tag.status != TAG_ASSIGNED or not tag.current_assignment:
+		frappe.throw(_("Tag {0} is {1}, not on an unsold item.").format(tag.name, tag.status))
+	if tag.basket and frappe.db.get_value("RFID Basket", tag.basket, "status") == "Open":
+		frappe.throw(_("Tag {0} is in an open bill at a counter ({1}). Take it off the bill first.").format(
+			tag.name, tag.basket))
+	serial_no, component, item_code, warehouse = tag.serial_no, tag.component, tag.item_code, tag.warehouse
+	close_assignment(tag.name, "Manual", remarks=reason, action="Removed")
+	if component:
+		frappe.db.set_value("Garment Component", component, "status", "Pending Tag")
+	if serial_no:
+		frappe.db.set_value("Serial No", serial_no, "custom_rfid_status", PENDING, update_modified=False)
+		refresh_serial_readiness(serial_no)
+	log_exception("Tag Removed",
+		_("Tag {0} removed from unsold {1} in {2} by {3}: {4}").format(
+			tag.name, serial_no or item_code, warehouse or "-", frappe.session.user, reason),
+		severity="Medium", epc=tag.name, serial_no=serial_no, component=component, device=device)
+	return frappe.get_doc("RFID Tag", tag.name)
+
+
 def untagged_qty(item_code, warehouse):
 	"""Units of a non-serial RFID item in a warehouse that have no tag yet."""
 	actual = flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty"))

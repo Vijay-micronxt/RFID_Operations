@@ -447,6 +447,7 @@
 		Sold: ["sale", "payments", "Sold"],
 		Freed: ["", "lock_open", "Freed"],
 		Detached: ["", "content_cut", "Removed after sale"],
+		Removed: ["warn", "label_off", "Removed (not sold)"],
 		Transferred: ["", "local_shipping", "Moved"],
 		Reserved: ["warn", "pending", "Read on draft"],
 		"Reservation Released": ["", "remove_done", "Taken off draft"],
@@ -465,11 +466,13 @@
 	const docLink = (dt, dn) =>
 		dt && dn ? `<a href="/app/${dt.toLowerCase().replace(/ /g, "-")}/${encodeURIComponent(dn)}" target="_blank">${esc(dn)}</a>` : "";
 	const H = { story: null };
+	const canRepair = (RFID.stations || []).includes("Tag Repair");
 
 	function renderStory(st) {
 		H.story = st;
 		const t = st.tag;
 		const actions = [];
+		if (t && t.status === "Assigned" && canRepair) actions.push(["Removed", "label_off", "Remove - use on another item"]);
 		if (t && t.current_assignment) actions.push(["Damaged", "broken_image", "Damaged - put a new tag"], ["Lost", "help", "Mark lost"]);
 		if (t && t.status === "Lost") actions.push(["Found", "search", "Found again"]);
 		if (t && ["Available"].includes(t.status)) actions.push(["Damaged", "broken_image", "Damaged"], ["Retired", "block", "Retire"]);
@@ -523,6 +526,13 @@
 		if (!b || !H.story?.tag) return;
 		const tag = H.story.tag;
 		const status = b.dataset.cond;
+		if (status === "Removed") {
+			const reason = await ask(`Remove tag from ${tag.item_name || tag.item_code}?`, "Why? e.g. not for sale any more, wrong item");
+			if (!reason) return;
+			await call("mapping.remove_tag", { epc: tag.name, reason });
+			snack("Tag removed - free to use again");
+			return openStory(tag.name);
+		}
 		if (status === "Damaged" && tag.current_assignment) {
 			const fresh = await ask(`New tag for ${tag.item_name || tag.item_code}`, "Read the new tag (leave empty to just retire)");
 			if (fresh) {
@@ -538,23 +548,58 @@
 	});
 
 	// ------------------------------------------------------------ remove tags
+	// Sold tags are freed at once. A tag on unsold stock asks a store manager what to do with it.
 	let released = 0;
+	const doneRow = (r) => `<div class="row"><span class="lead ${r.ok ? "ok" : "bad"}">${icon(r.ok ? "check" : "block", "small")}</span>
+		<div class="grow"><b>${esc(r.message)}</b><small>${esc(r.epc)}</small></div></div>`;
+	const unsoldRow = (r) => {
+		const on = [r.item_name || r.item_code, r.serial_no, r.component].filter(Boolean).map(esc).join(" · ");
+		return `<div class="row unsold" data-epc="${esc(r.epc)}"><span class="lead">${icon("help", "small")}</span>
+		<div class="grow"><b>Not sold: ${on || "unknown item"}</b><small>${esc(r.epc)}</small>
+			<div class="choices">
+				<button class="btn ghost" data-act="remove">${icon("label_off", "small")}Remove - use again</button>
+				<button class="btn ghost" data-act="Damaged">${icon("broken_image", "small")}Damaged</button>
+				<button class="btn ghost" data-act="Lost">${icon("help", "small")}Lost</button>
+			</div></div></div>`;
+	};
+	const countReleased = (n) => {
+		released += n;
+		$("d-count").textContent = released;
+	};
 	onScan($("d-scan"), async (codes) => {
 		const out = await call("mapping.detach", { codes });
 		const ok = out.filter((r) => r.ok).length;
-		released += ok;
-		$("d-count").textContent = released;
+		const unsold = out.filter((r) => r.unsold).length;
+		countReleased(ok);
 		$("d-empty").hidden = true;
-		snack(ok ? `${ok} tag${ok > 1 ? "s" : ""} released` : "Nothing released", !ok);
-		$("d-out").insertAdjacentHTML(
-			"afterbegin",
-			out
-				.map(
-					(r) => `<div class="row"><span class="lead ${r.ok ? "ok" : "bad"}">${icon(r.ok ? "check" : "block", "small")}</span>
-					<div class="grow"><b>${esc(r.message)}</b><small>${esc(r.epc)}</small></div></div>`
-				)
-				.join("")
+		snack(
+			ok ? `${ok} tag${ok > 1 ? "s" : ""} released` : unsold ? "Item not sold - choose what to do" : "Nothing released",
+			!ok && !unsold
 		);
+		$("d-out").insertAdjacentHTML("afterbegin", out.map((r) => (r.unsold ? unsoldRow(r) : doneRow(r))).join(""));
+	});
+	$("d-out").addEventListener("click", async (e) => {
+		const b = e.target.closest("[data-act]");
+		if (!b) return;
+		const row = b.closest("[data-epc]");
+		const epc = row.dataset.epc;
+		const act = b.dataset.act;
+		const reason = await ask(
+			act === "remove" ? "Remove this tag from the item?" : `Tag ${act.toLowerCase()}: why?`,
+			act === "remove" ? "Why? e.g. not for sale any more, wrong item" : "e.g. torn, fell off"
+		);
+		if (!reason) return;
+		if (act === "remove") {
+			const r = await call("mapping.remove_tag", { epc, reason });
+			countReleased(1);
+			row.outerHTML = doneRow(r);
+			snack("Tag removed - free to use again");
+		} else {
+			await call("mapping.set_condition", { epc, status: act, reason });
+			row.outerHTML = doneRow({ epc, ok: false, message: `Marked ${act.toLowerCase()} - item goes back to tagging` });
+			snack(`Tag marked ${act.toLowerCase()}`);
+		}
+		$("d-scan").focus();
 	});
 
 	// ------------------------------------------------------------ exit gate

@@ -11,7 +11,7 @@ from frappe import _
 from frappe.utils import cint
 
 from rfid_retail import rfid
-from rfid_retail.settings import require_station
+from rfid_retail.settings import has_station, require_station
 from rfid_retail.api.pos import _load
 
 @frappe.whitelist()
@@ -99,9 +99,12 @@ def replace_tag(old_epc, new_epc, reason="Tag Damaged", device=None):
 def detach(codes, device=None):
 	"""Detacher station: release tags of paid garments back to the reusable pool.
 
-	Only tags whose sale is complete can be released. Anything else is refused and logged.
+	Only tags whose sale is complete are released here. A tag still on unsold stock
+	is refused and logged, except for a user who may repair tags: they get the
+	choice to remove it (remove_tag), or mark it damaged or lost.
 	"""
 	require_station("Detach")
+	can_repair = has_station("Tag Repair")
 	out = []
 	for code in _load(codes):
 		code = rfid.normalize(code)
@@ -112,18 +115,32 @@ def detach(codes, device=None):
 		if tag.status == rfid.TAG_AVAILABLE:
 			out.append({"epc": code, "ok": True, "message": _("Already free")})
 			continue
+		if tag.status == rfid.TAG_ASSIGNED and can_repair:
+			out.append({"epc": code, "ok": False, "unsold": True, "item_code": tag.item_code,
+				"item_name": frappe.get_cached_value("Item", tag.item_code, "item_name") if tag.item_code else None,
+				"serial_no": tag.serial_no, "component": tag.component,
+				"message": _("Not sold - choose what to do")})
+			continue
 		if tag.status != rfid.TAG_SOLD:
 			msg = _("Detach attempted on {0} ({1}) which is {2}, not sold.").format(
 				code, tag.serial_no or tag.item_code, tag.status)
 			rfid.log_exception("Unconfirmed Detach", msg, severity="High", epc=code, serial_no=tag.serial_no,
 				component=tag.component, device=device)
 			rfid.log_event(code, "Rejected", reason=msg, device=device)
-			out.append({"epc": code, "ok": False, "message": _("Not sold - do not detach ({0})").format(tag.status)})
+			out.append({"epc": code, "ok": False, "message": _("Not sold - do not detach ({0}). A store manager can remove it.").format(tag.status)})
 			continue
 		rfid.close_assignment(code, "Detached After Sale", action="Detached")
 		out.append({"epc": code, "ok": True, "message": _("Released from {0}").format(
 			tag.component or tag.serial_no or tag.item_code)})
 	return out
+
+
+@frappe.whitelist(methods=["POST"])
+def remove_tag(epc, reason, device=None):
+	"""Take a good tag off unsold stock to use it on another item. The item goes back to the to-tag list."""
+	require_station("Tag Repair")
+	tag = rfid.remove_unsold_tag(epc, reason, device=device)
+	return {"epc": tag.name, "ok": True, "message": _("Removed - tag is free to use again")}
 
 
 @frappe.whitelist(methods=["POST"])
