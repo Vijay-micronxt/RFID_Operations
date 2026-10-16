@@ -7,3 +7,4 @@ rfid_retail.patches.v0_2.rename_label_job_to_sticker
 # Patches added in this section will be executed after doctypes are migrated
 rfid_retail.patches.v0_2.backfill_tag_cycles
 rfid_retail.patches.v0_2.drop_purchase_invoice_tag_fields
+rfid_retail.patches.v0_2.add_tag_removal_station

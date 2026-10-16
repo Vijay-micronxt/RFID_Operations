@@ -14,6 +14,7 @@
   "block_untracked_items",
   "cb_sale",
   "tag_release_mode",
+  "allow_unsold_tag_removal",
   "device_section",
   "device_offline_minutes",
   "exit_gate_enabled",
@@ -105,6 +106,13 @@
    "options": "Free the tag at once\nFree the tag after removal at the detach station",
    "default": "Free the tag at once",
    "description": "At once: the tag is reusable as soon as the bill is paid. After removal: it stays linked to the sold garment until it is read at the detach station."
+  },
+  {
+   "default": "0",
+   "fieldname": "allow_unsold_tag_removal",
+   "fieldtype": "Check",
+   "label": "Allow removing tags from unsold items",
+   "description": "On: users of the Tag Removal station (Station access below) can take a tag off an item that was not sold, on the Remove tags screen or in Tag history, and use it on another item. The item goes back to the to-tag list. Every removal is logged as a Tag Removed exception."
   },
   {
    "fieldname": "device_section",
@@ -357,7 +365,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-13 12:00:00.000000",
+ "modified": "2026-10-16 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Settings",

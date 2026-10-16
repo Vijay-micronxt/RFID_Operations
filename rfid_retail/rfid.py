@@ -392,8 +392,7 @@ def remove_unsold_tag(epc, reason, device=None):
 	written to the history and raised as an exception, so a manager can see who
 	took tags off unpaid stock and why.
 	"""
-	if not (reason or "").strip():
-		frappe.throw(_("Write why the tag is removed (for example: item not for sale, wrong item tagged)."))
+	reason = (reason or "").strip() or None
 	tag = frappe.get_doc("RFID Tag", normalize(epc), for_update=True)
 	if tag.status == TAG_SOLD:
 		frappe.throw(_("Tag {0} is on a sold item. Remove it on the Remove tags screen.").format(tag.name))
@@ -411,7 +410,7 @@ def remove_unsold_tag(epc, reason, device=None):
 		refresh_serial_readiness(serial_no)
 	log_exception("Tag Removed",
 		_("Tag {0} removed from unsold {1} in {2} by {3}: {4}").format(
-			tag.name, serial_no or item_code, warehouse or "-", frappe.session.user, reason),
+			tag.name, serial_no or item_code, warehouse or "-", frappe.session.user, reason or _("no reason given")),
 		severity="Medium", epc=tag.name, serial_no=serial_no, component=component, device=device)
 	return frappe.get_doc("RFID Tag", tag.name)
 

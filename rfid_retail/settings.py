@@ -13,6 +13,7 @@ DEFAULT_STATION_ROLES = {
 	"Billing": ("RFID Cashier", "RFID Store Manager"),
 	"Tag Mapping": ("RFID Stock Operator", "RFID Store Manager"),
 	"Tag Repair": ("RFID Store Manager",),
+	"Tag Removal": ("RFID Store Manager",),
 	"Detach": ("RFID Cashier", "RFID Stock Operator", "RFID Store Manager"),
 	"Exit Gate": ("RFID Device", "RFID Store Manager"),
 	"Device API": ("RFID Device", "RFID Store Manager"),
@@ -54,6 +55,11 @@ def allowed_stations(user=None):
 def require_enabled():
 	if not is_enabled():
 		frappe.throw(_("RFID is switched off on this site (RFID Settings)."), title=_("RFID disabled"))
+
+
+def can_remove_unsold_tags(user=None):
+	"""Taking a tag off unsold stock: switched on in RFID Settings and the user holds the Tag Removal station."""
+	return is_enabled() and cint(get("allow_unsold_tag_removal")) and has_station("Tag Removal", user)
 
 
 def require_station(*stations):

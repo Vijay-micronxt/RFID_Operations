@@ -73,8 +73,8 @@
 		document.body.appendChild(back);
 	}
 
-	/** Material dialog with one text field. Resolves to the trimmed text, or null on cancel. */
-	function ask(title, placeholder) {
+	/** Material dialog with one text field. Resolves to the trimmed text, or null on cancel (or empty, unless optional). */
+	function ask(title, placeholder, optional = false) {
 		return new Promise((resolve) => {
 			const back = document.createElement("div");
 			back.className = "dialog-back";
@@ -84,7 +84,8 @@
 			const input = back.querySelector("input");
 			const close = (ok) => {
 				back.remove();
-				resolve(ok && input.value.trim() ? input.value.trim() : null);
+				const text = input.value.trim();
+				resolve(ok && (text || optional) ? text : null);
 			};
 			back.addEventListener("click", (e) => {
 				if (e.target === back) close(false);
@@ -466,13 +467,13 @@
 	const docLink = (dt, dn) =>
 		dt && dn ? `<a href="/app/${dt.toLowerCase().replace(/ /g, "-")}/${encodeURIComponent(dn)}" target="_blank">${esc(dn)}</a>` : "";
 	const H = { story: null };
-	const canRepair = (RFID.stations || []).includes("Tag Repair");
+	const canRemoveUnsold = !!RFID.canRemoveUnsold;
 
 	function renderStory(st) {
 		H.story = st;
 		const t = st.tag;
 		const actions = [];
-		if (t && t.status === "Assigned" && canRepair) actions.push(["Removed", "label_off", "Remove - use on another item"]);
+		if (t && t.status === "Assigned" && canRemoveUnsold) actions.push(["Removed", "label_off", "Remove - use on another item"]);
 		if (t && t.current_assignment) actions.push(["Damaged", "broken_image", "Damaged - put a new tag"], ["Lost", "help", "Mark lost"]);
 		if (t && t.status === "Lost") actions.push(["Found", "search", "Found again"]);
 		if (t && ["Available"].includes(t.status)) actions.push(["Damaged", "broken_image", "Damaged"], ["Retired", "block", "Retire"]);
@@ -527,10 +528,10 @@
 		const tag = H.story.tag;
 		const status = b.dataset.cond;
 		if (status === "Removed") {
-			const reason = await ask(`Remove tag from ${tag.item_name || tag.item_code}?`, "Why? e.g. not for sale any more, wrong item");
-			if (!reason) return;
-			await call("mapping.remove_tag", { epc: tag.name, reason });
-			snack("Tag removed - free to use again");
+			const reason = await ask(`Remove tag from ${tag.item_name || tag.item_code}?`, "Reason (optional)", true);
+			if (reason === null) return;
+			const [r] = await call("mapping.remove_tags", { codes: [tag.name], action: "Remove", reason });
+			snack(r.message, !r.ok);
 			return openStory(tag.name);
 		}
 		if (status === "Damaged" && tag.current_assignment) {
@@ -548,58 +549,83 @@
 	});
 
 	// ------------------------------------------------------------ remove tags
-	// Sold tags are freed at once. A tag on unsold stock asks a store manager what to do with it.
+	// Sold tags are freed at once. Tags on unsold stock (only when RFID Settings allows it) wait in the list,
+	// ticked, so many can be removed in one go with one optional reason.
 	let released = 0;
 	const doneRow = (r) => `<div class="row"><span class="lead ${r.ok ? "ok" : "bad"}">${icon(r.ok ? "check" : "block", "small")}</span>
 		<div class="grow"><b>${esc(r.message)}</b><small>${esc(r.epc)}</small></div></div>`;
 	const unsoldRow = (r) => {
 		const on = [r.item_name || r.item_code, r.serial_no, r.component].filter(Boolean).map(esc).join(" · ");
-		return `<div class="row unsold" data-epc="${esc(r.epc)}"><span class="lead">${icon("help", "small")}</span>
-		<div class="grow"><b>Not sold: ${on || "unknown item"}</b><small>${esc(r.epc)}</small>
-			<div class="choices">
-				<button class="btn ghost" data-act="remove">${icon("label_off", "small")}Remove - use again</button>
-				<button class="btn ghost" data-act="Damaged">${icon("broken_image", "small")}Damaged</button>
-				<button class="btn ghost" data-act="Lost">${icon("help", "small")}Lost</button>
-			</div></div></div>`;
+		return `<label class="row unsold" data-epc="${esc(r.epc)}"><input type="checkbox" class="pick" checked>
+		<div class="grow"><b>Not sold: ${on || "unknown item"}</b><small>${esc(r.epc)}</small></div></label>`;
 	};
+	const picks = () => [...document.querySelectorAll("#d-out .unsold .pick")];
+	function syncBulk() {
+		const all = picks();
+		const on = all.filter((c) => c.checked).length;
+		$("d-bulk").hidden = !all.length;
+		$("d-sel").textContent = `${on} of ${all.length} selected`;
+		$("d-all").checked = all.length > 0 && on === all.length;
+		$("d-all").indeterminate = on > 0 && on < all.length;
+		document.querySelectorAll("[data-bulk]").forEach((b) => (b.disabled = !on));
+	}
 	const countReleased = (n) => {
 		released += n;
 		$("d-count").textContent = released;
 	};
 	onScan($("d-scan"), async (codes) => {
-		const out = await call("mapping.detach", { codes });
+		const fresh = codes.filter((c) => !document.querySelector(`#d-out .unsold[data-epc="${CSS.escape(c.toUpperCase())}"]`));
+		if (!fresh.length) return snack("Already in the list");
+		const out = await call("mapping.detach", { codes: fresh });
 		const ok = out.filter((r) => r.ok).length;
 		const unsold = out.filter((r) => r.unsold).length;
 		countReleased(ok);
 		$("d-empty").hidden = true;
 		snack(
-			ok ? `${ok} tag${ok > 1 ? "s" : ""} released` : unsold ? "Item not sold - choose what to do" : "Nothing released",
+			ok ? `${ok} tag${ok > 1 ? "s" : ""} released` : unsold ? `${unsold} not sold - tick and choose below` : "Nothing released",
 			!ok && !unsold
 		);
 		$("d-out").insertAdjacentHTML("afterbegin", out.map((r) => (r.unsold ? unsoldRow(r) : doneRow(r))).join(""));
+		syncBulk();
 	});
-	$("d-out").addEventListener("click", async (e) => {
-		const b = e.target.closest("[data-act]");
+	$("d-out").addEventListener("change", (e) => e.target.classList.contains("pick") && syncBulk());
+	$("d-all").addEventListener("change", (e) => {
+		picks().forEach((c) => (c.checked = e.target.checked));
+		syncBulk();
+	});
+	$("d-bulk").addEventListener("click", async (e) => {
+		const b = e.target.closest("[data-bulk]");
 		if (!b) return;
-		const row = b.closest("[data-epc]");
-		const epc = row.dataset.epc;
-		const act = b.dataset.act;
-		const reason = await ask(
-			act === "remove" ? "Remove this tag from the item?" : `Tag ${act.toLowerCase()}: why?`,
-			act === "remove" ? "Why? e.g. not for sale any more, wrong item" : "e.g. torn, fell off"
-		);
-		if (!reason) return;
-		if (act === "remove") {
-			const r = await call("mapping.remove_tag", { epc, reason });
-			countReleased(1);
-			row.outerHTML = doneRow(r);
-			snack("Tag removed - free to use again");
-		} else {
-			await call("mapping.set_condition", { epc, status: act, reason });
-			row.outerHTML = doneRow({ epc, ok: false, message: `Marked ${act.toLowerCase()} - item goes back to tagging` });
-			snack(`Tag marked ${act.toLowerCase()}`);
+		const rows = picks().filter((c) => c.checked).map((c) => c.closest("[data-epc]"));
+		if (!rows.length) return;
+		const action = b.dataset.bulk;
+		const buttons = document.querySelectorAll("[data-bulk]");
+		buttons.forEach((x) => (x.disabled = true));
+		try {
+			const out = await call("mapping.remove_tags", {
+				codes: rows.map((r) => r.dataset.epc),
+				action,
+				reason: $("d-reason").value.trim(),
+			});
+			const byEpc = Object.fromEntries(out.map((r) => [r.epc, r]));
+			let done = 0;
+			rows.forEach((row) => {
+				const r = byEpc[row.dataset.epc];
+				if (!r) return;
+				if (r.ok) done++;
+				row.outerHTML = doneRow(r);
+			});
+			if (action === "Remove") countReleased(done);
+			$("d-reason").value = "";
+			const failed = out.length - done;
+			snack(
+				`${done} tag${done === 1 ? "" : "s"} ${action === "Remove" ? "removed" : `marked ${action.toLowerCase()}`}${failed ? ` · ${failed} failed` : ""}`,
+				!done
+			);
+		} finally {
+			syncBulk();
+			$("d-scan").focus();
 		}
-		$("d-scan").focus();
 	});
 
 	// ------------------------------------------------------------ exit gate
