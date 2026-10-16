@@ -105,6 +105,7 @@ def get_custom_fields():
 	]
 	return {
 		"Purchase Receipt Item": row_tags,
+		"Purchase Invoice Item": row_tags,
 		"Stock Entry Detail": row_tags,
 		"Item": [
 			{"fieldname": "custom_rfid_section", "fieldtype": "Section Break", "label": "RFID",

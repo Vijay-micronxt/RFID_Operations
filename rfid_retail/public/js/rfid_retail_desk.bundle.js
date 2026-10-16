@@ -82,12 +82,13 @@ rfid_retail.toggle_item_code = function (frm) {
 // ------------------------------------------------------------ RFID tags on stock rows
 // After submit: pick a row, put all tags of its pieces on the reader at once. The tags are saved
 // only when their number is exactly what the row needs and every tag is usable.
-const RFID_TAG_DOCTYPES = ["Purchase Receipt", "Stock Entry"];
+const RFID_TAG_DOCTYPES = ["Purchase Receipt", "Purchase Invoice", "Stock Entry"];
 
 RFID_TAG_DOCTYPES.forEach((doctype) => {
 	frappe.ui.form.on(doctype, {
 		refresh(frm) {
 			if (!(frappe.boot.rfid_retail || {}).enabled || frm.doc.docstatus !== 1) return;
+			if (doctype === "Purchase Invoice" && !frm.doc.update_stock) return;
 			frm.add_custom_button(__("RFID Tags"), () => rfid_retail.tag_dialog(frm));
 		},
 	});
