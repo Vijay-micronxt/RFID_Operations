@@ -8,7 +8,7 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
-	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=12">
+	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=14">
 </head>
 <body>
 {% set labels = {"mapping": ["sell", "Tag garments"], "history": ["history", "Tag history"], "detach": ["content_cut", "Remove tags"], "gate": ["door_open", "Exit gate"], "audit": ["inventory", "Stock count"]} %}
@@ -155,7 +155,7 @@
 <section class="screen split" data-screen="detach">
 	<aside class="panel">
 		<div class="panel-head"><h2>Remove tags</h2></div>
-		<p class="muted">After the customer has paid, read the tags here. Only tags of completed sales are released for reuse.</p>
+		<p class="muted">Read tags of paid items here to free them for reuse. A tag on an item that is not sold is not freed; a store manager can remove it from here.</p>
 		<div class="scan">
 			<span class="ms">nfc</span>
 			<input id="d-scan" autocomplete="off" placeholder="Scan or type tag">
@@ -163,6 +163,15 @@
 	</aside>
 	<section class="panel work">
 		<div class="panel-head"><h2>Released this session</h2><span class="count" id="d-count">0</span></div>
+		<div class="bulkbar" id="d-bulk" hidden>
+			<label class="check"><input type="checkbox" id="d-all" checked><span id="d-sel">0 selected</span></label>
+			<input class="field-sm" id="d-reason" autocomplete="off" placeholder="Reason (optional)">
+			<div class="choices">
+				<button class="btn primary" data-bulk="Remove"><span class="ms small">label_off</span>Remove - use again</button>
+				<button class="btn ghost" data-bulk="Damaged"><span class="ms small">broken_image</span>Damaged</button>
+				<button class="btn ghost" data-bulk="Lost"><span class="ms small">help</span>Lost</button>
+			</div>
+		</div>
 		<div class="list" id="d-out"></div>
 		<div class="placeholder small" id="d-empty"><span class="ms">sell</span><p>Released tags will appear here.</p></div>
 	</section>
@@ -235,9 +244,11 @@
 	window.RFID = {
 		csrf: "{{ csrf_token }}",
 		devices: {{ devices | tojson }},
-		tabs: {{ tabs | tojson }}
+		tabs: {{ tabs | tojson }},
+		stations: {{ stations | tojson }},
+		canRemoveUnsold: {{ can_remove_unsold | tojson }}
 	};
 </script>
-<script src="/assets/rfid_retail/js/rfid_station.js?v=13"></script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=15"></script>
 </body>
 </html>

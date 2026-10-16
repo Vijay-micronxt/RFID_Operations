@@ -11,7 +11,7 @@ from frappe import _
 from frappe.utils import cint
 
 from rfid_retail import rfid
-from rfid_retail.settings import require_station
+from rfid_retail.settings import can_remove_unsold_tags, get as setting, require_station
 from rfid_retail.api.pos import _load
 
 @frappe.whitelist()
@@ -99,9 +99,13 @@ def replace_tag(old_epc, new_epc, reason="Tag Damaged", device=None):
 def detach(codes, device=None):
 	"""Detacher station: release tags of paid garments back to the reusable pool.
 
-	Only tags whose sale is complete can be released. Anything else is refused and logged.
+	Only tags whose sale is complete are released here. A tag still on unsold stock
+	is refused and logged, unless RFID Settings allows removing tags from unsold
+	items and the user holds the Tag Removal station: then they choose what to do
+	(remove_tags).
 	"""
 	require_station("Detach")
+	can_remove = can_remove_unsold_tags()
 	out = []
 	for code in _load(codes):
 		code = rfid.normalize(code)
@@ -112,17 +116,63 @@ def detach(codes, device=None):
 		if tag.status == rfid.TAG_AVAILABLE:
 			out.append({"epc": code, "ok": True, "message": _("Already free")})
 			continue
+		if tag.status == rfid.TAG_ASSIGNED and can_remove:
+			out.append({"epc": code, "ok": False, "unsold": True, "item_code": tag.item_code,
+				"item_name": frappe.get_cached_value("Item", tag.item_code, "item_name") if tag.item_code else None,
+				"serial_no": tag.serial_no, "component": tag.component,
+				"message": _("Not sold - choose what to do")})
+			continue
 		if tag.status != rfid.TAG_SOLD:
 			msg = _("Detach attempted on {0} ({1}) which is {2}, not sold.").format(
 				code, tag.serial_no or tag.item_code, tag.status)
 			rfid.log_exception("Unconfirmed Detach", msg, severity="High", epc=code, serial_no=tag.serial_no,
 				component=tag.component, device=device)
 			rfid.log_event(code, "Rejected", reason=msg, device=device)
-			out.append({"epc": code, "ok": False, "message": _("Not sold - do not detach ({0})").format(tag.status)})
+			hint = _(" Ask a user with Tag Removal access.") if tag.status == rfid.TAG_ASSIGNED and cint(
+				setting("allow_unsold_tag_removal")) else ""
+			out.append({"epc": code, "ok": False, "message": _("Not sold - do not detach ({0}).").format(tag.status) + hint})
 			continue
 		rfid.close_assignment(code, "Detached After Sale", action="Detached")
 		out.append({"epc": code, "ok": True, "message": _("Released from {0}").format(
 			tag.component or tag.serial_no or tag.item_code)})
+	return out
+
+
+REMOVE_ACTIONS = ("Remove", rfid.TAG_DAMAGED, rfid.TAG_LOST)
+
+
+@frappe.whitelist(methods=["POST"])
+def remove_tags(codes, action="Remove", reason=None, device=None):
+	"""Tags on unsold stock, many at once: Remove (free the tag for another item), Damaged or Lost.
+
+	The reason is optional and shared by the whole batch. One bad tag does not stop the rest.
+	"""
+	require_station("Detach", "Tag Repair")
+	if not can_remove_unsold_tags():
+		frappe.throw(_("Removing tags from unsold items is switched off or not allowed for you (RFID Settings)."),
+			frappe.PermissionError)
+	if action not in REMOVE_ACTIONS:
+		frappe.throw(_("Unknown action {0}").format(action))
+	reason = (reason or "").strip()
+	out = []
+	for code in _load(codes):
+		code = rfid.normalize(code)
+		frappe.db.savepoint("rfid_remove_tag")
+		try:
+			if action == "Remove":
+				rfid.remove_unsold_tag(code, reason, device=device)
+				message = _("Removed - free to use again")
+			else:
+				rfid.set_tag_condition(code, action, reason or _("Marked at the Remove tags screen"), device=device)
+				rfid.log_exception("Tag Lost" if action == rfid.TAG_LOST else "Tag Replaced",
+					_("Tag {0} marked {1}: {2}").format(code, action, reason or _("no reason given")),
+					severity="Low", epc=code, device=device)
+				message = _("Marked {0} - item goes back to tagging").format(_(action).lower())
+			out.append({"epc": code, "ok": True, "action": action, "message": message})
+		except frappe.ValidationError as e:
+			frappe.db.rollback(save_point="rfid_remove_tag")
+			frappe.clear_messages()
+			out.append({"epc": code, "ok": False, "action": action, "message": str(e)})
 	return out
 
 

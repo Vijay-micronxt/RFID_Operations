@@ -274,3 +274,15 @@ button.item:hover { background: var(--gray-50); }
 .uses th, .uses td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--gray-200); }
 .uses th { color: var(--gray-500); font-weight: 500; }
 @media (max-width: 860px) { .uses { display: block; overflow-x: auto; } }
+
+/* remove tags: tags on unsold items, picked in bulk */
+.row.unsold { background: var(--gray-50); cursor: pointer; }
+.row.unsold .pick, .bulkbar .check input { width: 18px; height: 18px; accent-color: var(--blue); flex: none; }
+.bulkbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; margin-bottom: 12px;
+	border: 1px solid var(--gray-300); border-radius: 12px; background: #fff; position: sticky; top: 0; z-index: 1; }
+.bulkbar .check { display: flex; align-items: center; gap: 8px; font-weight: 500; cursor: pointer; }
+.bulkbar .field-sm { flex: 1; min-width: 160px; height: 36px; padding: 0 10px; border: 1px solid var(--gray-300);
+	border-radius: 8px; font: inherit; }
+.choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.choices .btn { height: 36px; padding: 0 12px; font-size: 13px; }
+.choices .btn:disabled { opacity: .5; cursor: default; }

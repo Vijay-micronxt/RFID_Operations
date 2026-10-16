@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 
-from rfid_retail.settings import allowed_stations, is_enabled
+from rfid_retail.settings import allowed_stations, can_remove_unsold_tags, is_enabled
 
 no_cache = 1
 
@@ -27,6 +27,7 @@ def get_context(context):
 		frappe.throw(_("No RFID station is assigned to your roles. Ask your manager (RFID Settings)."),
 			frappe.PermissionError)
 	context.stations = sorted(stations)
+	context.can_remove_unsold = bool(can_remove_unsold_tags()) if context.enabled else False
 	context.csrf_token = frappe.sessions.get_csrf_token()
 	context.user_fullname = frappe.utils.get_fullname(frappe.session.user)
 	context.company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value(
