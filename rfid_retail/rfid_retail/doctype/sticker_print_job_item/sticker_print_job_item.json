@@ -15,6 +15,15 @@
    "in_list_view": 1
   },
   {
+   "columns": 1,
+   "default": "1",
+   "fieldname": "copies",
+   "fieldtype": "Int",
+   "label": "Qty",
+   "in_list_view": 1,
+   "description": "How many stickers to print"
+  },
+  {
    "fieldname": "item_name",
    "fieldtype": "Data",
    "label": "Item Name",
@@ -45,7 +54,7 @@
    "description": "Size, colour etc. printed under the name"
   },
   {
-   "columns": 2,
+   "columns": 1,
    "fieldname": "barcode",
    "fieldtype": "Data",
    "label": "Barcode",
@@ -58,19 +67,10 @@
    "fieldtype": "Currency",
    "label": "Price",
    "in_list_view": 1
-  },
-  {
-   "columns": 1,
-   "default": "1",
-   "fieldname": "copies",
-   "fieldtype": "Int",
-   "label": "Qty",
-   "in_list_view": 1,
-   "description": "How many stickers to print"
   }
  ],
  "links": [],
- "modified": "2026-10-09 12:00:00.000000",
+ "modified": "2026-10-16 15:44:09.929215",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "Sticker Print Job Item",
@@ -81,12 +81,12 @@
  "states": [],
  "field_order": [
   "item_code",
+  "copies",
   "item_name",
   "serial_no",
   "component",
   "details",
   "barcode",
-  "rate",
-  "copies"
+  "rate"
  ]
 }
