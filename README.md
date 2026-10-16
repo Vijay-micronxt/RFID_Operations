@@ -47,7 +47,8 @@ installed it adds an RFID tray to the POS Next sale screen.
   freed, moved, returned, replaced, damaged, lost, found, exit alarm, rejected at the counter).
 
 **Tagging at purchase**
-- `RFID Tags` button on a draft Purchase Receipt or Stock Entry (where stock comes in or moves):
+- `RFID Tags` button on a submitted Purchase Receipt, Purchase Invoice with Update Stock, or Stock
+  Entry (where stock comes in or moves):
   pick the row, put all tags of that item on the reader, each tag is checked live and the row
   keeps the list. Count must not exceed the quantity.
 - Draft save reserves the tags; submit puts them on the new units (on the new serials for serial

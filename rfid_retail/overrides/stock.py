@@ -1,6 +1,7 @@
 """Stock documents and RFID tags.
 
-Purchase Receipt and Stock Entry rows (where stock comes in, goes out or moves)
+Purchase Receipt, Purchase Invoice (with Update Stock) and Stock Entry rows (where stock
+comes in, goes out or moves)
 carry the tags read for them in `custom_rfid_tags`, usually by bulk-reading every tag of
 one item at the station (identical units, so which tag goes on which piece does
 not matter).
@@ -23,7 +24,7 @@ from rfid_retail import rfid
 from rfid_retail.settings import get as setting, is_enabled, require_station
 from rfid_retail.overrides.sales_invoice import get_row_serials
 
-TAGGED_DOCTYPES = ("Purchase Receipt", "Stock Entry")
+TAGGED_DOCTYPES = ("Purchase Receipt", "Purchase Invoice", "Stock Entry")
 IN, OUT, TRANSFER = "in", "out", "transfer"
 
 
@@ -232,6 +233,8 @@ def _row_doc(doctype, name, row):
 	doc.check_permission("submit" if doc.meta.is_submittable else "write")
 	if doc.docstatus != 1:
 		frappe.throw(_("Submit {0} first. Tags are read for stock that has come in.").format(name))
+	if doc.doctype == "Purchase Invoice" and not cint(doc.update_stock):
+		frappe.throw(_("Purchase Invoice {0} does not update stock. Read the tags on its Purchase Receipt.").format(name))
 	child = next((r for r in doc.items if r.name == row), None)
 	if not child:
 		frappe.throw(_("Row not found."))
