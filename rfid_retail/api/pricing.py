@@ -82,3 +82,49 @@ def set_offer(items, offer):
 		price.save()
 		updated.append({"item_code": code, "mrp": flt(price.custom_mrp), "rate": offer_price(price.custom_mrp, offer)})
 	return {"updated": updated, "missing": missing}
+
+
+@frappe.whitelist()
+def item_rows(doc, rows):
+	"""Item table rows for many items in one call (Add Variants): ERPNext's own item details for each,
+	with the qty / rate given. The form adds them without per-row triggers, so 50+ rows stay fast."""
+	from erpnext.stock.get_item_details import get_item_details
+
+	doc = frappe._dict(frappe.parse_json(doc))
+	rows = frappe.parse_json(rows)
+	frappe.has_permission(doc.doctype, "create" if not doc.get("name") or doc.get("__islocal") else "write", throw=True)
+	child_doctype = frappe.get_meta(doc.doctype).get_field("items").options
+	out = []
+	for r in rows:
+		args = {
+			"item_code": r["item_code"],
+			"set_warehouse": doc.get("set_warehouse"),
+			"supplier": doc.get("supplier"),
+			"currency": doc.get("currency"),
+			"is_internal_supplier": doc.get("is_internal_supplier"),
+			"update_stock": doc.get("update_stock"),
+			"conversion_rate": doc.get("conversion_rate"),
+			"price_list": doc.get("buying_price_list"),
+			"price_list_currency": doc.get("price_list_currency"),
+			"plc_conversion_rate": doc.get("plc_conversion_rate"),
+			"company": doc.get("company"),
+			"is_return": doc.get("is_return"),
+			"is_subcontracted": doc.get("is_subcontracted"),
+			"ignore_pricing_rule": doc.get("ignore_pricing_rule"),
+			"doctype": doc.doctype,
+			"name": doc.get("name"),
+			"project": doc.get("project"),
+			"qty": flt(r.get("qty")) or 1,
+			"tax_category": doc.get("tax_category"),
+			"child_doctype": child_doctype,
+		}
+		details = frappe._dict(get_item_details(args, doc))
+		details.item_code = r["item_code"]
+		details.qty = flt(r.get("qty")) or 1
+		details.stock_qty = details.qty * (flt(details.conversion_factor) or 1)
+		if flt(r.get("rate")) > 0:
+			# the rate typed in the dialog is the purchase rate: no price list discount on top
+			details.update({"rate": flt(r["rate"]), "price_list_rate": flt(r["rate"]),
+				"discount_percentage": 0, "discount_amount": 0, "margin_rate_or_amount": 0})
+		out.append(details)
+	return out

@@ -22,34 +22,46 @@ P.offer_price = (mrp, offer) => {
 };
 P.is_blank = (v) => v === null || v === undefined || v === "";
 
+// GST % of item tax templates, fetched once per template
+P.load_gst = async function (templates) {
+	const missing = [...new Set(templates.filter((t) => t && !(t in P.gst_cache)))];
+	if (!missing.length) return;
+	const rows = await frappe.db.get_list("Item Tax Template", {
+		filters: { name: ["in", missing] },
+		fields: ["name", "gst_rate"],
+		limit: missing.length,
+	});
+	missing.forEach((t) => (P.gst_cache[t] = 0));
+	rows.forEach((r) => (P.gst_cache[r.name] = flt(r.gst_rate)));
+};
+
+// MRP and offer price of one row, written straight onto it (no triggers); GST rates must be loaded
+P.compute = function (frm, row) {
+	const gst = row.item_tax_template ? flt(P.gst_cache[row.item_tax_template]) : flt(row.custom_gst_percent);
+	const margin = P.is_blank(row.custom_margin_percent) ? P.default_margin() : flt(row.custom_margin_percent);
+	const base = (flt(row.rate) * flt(frm.doc.conversion_rate || 1)) / (flt(row.conversion_factor) || 1);
+	row.custom_gst_percent = gst;
+	row.custom_selling_price = base > 0 ? P.round_up(base * (1 + gst / 100) * (1 + margin / 100)) : 0;
+	row.custom_offer_price = P.offer_price(row.custom_selling_price, row.custom_offer_percent);
+};
+
 P.row_prices = async function (frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
 	if (!row.item_code || !P.settings().purchase_pricing) return;
-	let gst = flt(row.custom_gst_percent);
-	if (row.item_tax_template) {
-		if (!(row.item_tax_template in P.gst_cache)) {
-			const r = await frappe.db.get_value("Item Tax Template", row.item_tax_template, "gst_rate");
-			P.gst_cache[row.item_tax_template] = flt(r.message && r.message.gst_rate);
-		}
-		gst = P.gst_cache[row.item_tax_template];
-	}
-	const margin = P.is_blank(row.custom_margin_percent) ? P.default_margin() : flt(row.custom_margin_percent);
-	const base = (flt(row.rate) * flt(frm.doc.conversion_rate || 1)) / (flt(row.conversion_factor) || 1);
-	const mrp = base > 0 ? P.round_up(base * (1 + gst / 100) * (1 + margin / 100)) : 0;
-	await frappe.model.set_value(cdt, cdn, {
-		custom_gst_percent: gst,
-		custom_selling_price: mrp,
-		custom_offer_price: P.offer_price(mrp, row.custom_offer_percent),
-	});
+	await P.load_gst([row.item_tax_template]);
+	P.compute(frm, row);
+	frm.fields_dict.items.grid.grid_rows_by_docname[cdn]?.refresh();
 };
 
-// a new row starts with the offer the item already sells with
+// a row picked by hand starts with the offer the item already sells with
 P.current_offer = async function (frm, cdt, cdn) {
 	const row = locals[cdt][cdn];
 	if (!row.item_code || !P.settings().offers) return;
-	const price = await frappe.xcall("rfid_retail.api.pricing.selling_price", { item_code: row.item_code });
+	const item_code = row.item_code;
+	const price = await frappe.xcall("rfid_retail.api.pricing.selling_price", { item_code });
+	// the user may have typed an offer or changed the item meanwhile
+	if (row.item_code !== item_code || row.__offer_set) return;
 	row.__offer_current = price ? price.offer : 0;
-	row.__offer_set = 0;
 	await frappe.model.set_value(cdt, cdn, "custom_offer_percent", row.__offer_current);
 };
 
@@ -60,24 +72,39 @@ P.offer_changed = function (frm, cdt, cdn) {
 	return P.row_prices(frm, cdt, cdn);
 };
 
-// set item_code first and let ERPNext fetch the item, then the values
-P.add_item_row = async function (frm, values) {
-	let row = (frm.doc.items || []).find((r) => !r.item_code);
-	if (!row) row = frm.add_child("items");
-	await frappe.model.set_value(row.doctype, row.name, "item_code", values.item_code);
-	// qty re-applies the price list rate, so the rate goes in after it
-	await frappe.model.set_value(row.doctype, row.name, "qty", flt(values.qty) || 1);
-	const rest = {};
-	if (values.template) rest.custom_variant_of = values.template;
-	if (!P.is_blank(values.margin)) rest.custom_margin_percent = values.margin;
-	if (!P.is_blank(values.offer)) rest.custom_offer_percent = values.offer;
-	if (Object.keys(rest).length) await frappe.model.set_value(row.doctype, row.name, rest);
-	if (!P.is_blank(values.rate) && flt(values.rate) > 0) await frappe.model.set_value(row.doctype, row.name, "rate", values.rate);
-	return row;
+// recalculate the document once after changing many rows directly
+P.after_bulk_change = function (frm) {
+	frm.doc.items.forEach((r, i) => (r.idx = i + 1));
+	frm.cscript.calculate_taxes_and_totals();
+	frm.refresh_field("items");
+	frm.dirty();
+};
+
+// Add many rows in one go: ERPNext's item details for all of them come in one call, the rows are
+// added without per-row triggers (no race between them, fast with 50+ rows), totals once at the end.
+P.add_rows = async function (frm, rows) {
+	const details = await frappe.xcall("rfid_retail.api.pricing.item_rows", { doc: frm.doc, rows });
+	await P.load_gst(details.map((d) => d.item_tax_template));
+	frm.doc.items = (frm.doc.items || []).filter((r) => r.item_code);
+	const skip = new Set(["doctype", "name", "idx", "parent", "parentfield", "parenttype", "__islocal"]);
+	details.forEach((d, i) => {
+		const src = rows[i];
+		const row = frm.add_child("items");
+		Object.keys(d).forEach((k) => !skip.has(k) && (row[k] = d[k]));
+		if (src.template) row.custom_variant_of = src.template;
+		row.custom_margin_percent = P.is_blank(src.margin) ? P.default_margin() : flt(src.margin);
+		if (P.settings().offers) {
+			row.custom_offer_percent = flt(src.offer);
+			row.__offer_set = 1; // the dialog value wins, also 0
+		}
+		if (P.settings().purchase_pricing) P.compute(frm, row);
+	});
+	P.after_bulk_change(frm);
 };
 
 P.add_variants_dialog = function (frm) {
 	const COMMON = ["qty", "rate", "margin", "offer"];
+	const offers = P.settings().offers;
 	const d = new frappe.ui.Dialog({
 		title: __("Add Variants"),
 		size: "extra-large",
@@ -98,7 +125,7 @@ P.add_variants_dialog = function (frm) {
 			{ fieldtype: "Column Break" },
 			{ fieldname: "margin", fieldtype: "Percent", label: __("Margin %"), default: P.default_margin(), onchange: () => apply("margin") },
 			{ fieldtype: "Column Break" },
-			{ fieldname: "offer", fieldtype: "Percent", label: __("Offer %"), onchange: () => apply("offer") },
+			{ fieldname: "offer", fieldtype: "Percent", label: __("Offer %"), hidden: !offers, onchange: () => apply("offer") },
 			{ fieldtype: "Section Break", label: __("Variants"), description: __("Change any row on its own. Select rows and press Delete to leave them out.") },
 			{
 				fieldname: "variants",
@@ -112,7 +139,7 @@ P.add_variants_dialog = function (frm) {
 					{ fieldname: "qty", fieldtype: "Float", label: __("Qty"), in_list_view: 1, columns: 1 },
 					{ fieldname: "rate", fieldtype: "Currency", label: __("Rate"), in_list_view: 1, columns: 1 },
 					{ fieldname: "margin", fieldtype: "Percent", label: __("Margin %"), in_list_view: 1, columns: 1 },
-					{ fieldname: "offer", fieldtype: "Percent", label: __("Offer %"), in_list_view: 1, columns: 1 },
+					{ fieldname: "offer", fieldtype: "Percent", label: __("Offer %"), in_list_view: offers ? 1 : 0, columns: 1 },
 				],
 			},
 		],
@@ -121,11 +148,6 @@ P.add_variants_dialog = function (frm) {
 	});
 
 	const table = () => d.fields_dict.variants;
-	const common = () => {
-		const v = {};
-		COMMON.forEach((f) => (v[f] = d.get_value(f)));
-		return v;
-	};
 
 	async function load() {
 		const template = d.get_value("template");
@@ -133,7 +155,8 @@ P.add_variants_dialog = function (frm) {
 		if (template) {
 			const variants = await frappe.xcall("rfid_retail.api.pricing.get_variants", { template });
 			if (!variants.length) frappe.show_alert({ message: __("{0} has no active variants.", [template]), indicator: "orange" });
-			const v = common();
+			const v = {};
+			COMMON.forEach((f) => (v[f] = d.get_value(f)));
 			table().df.data = variants.map((x) => ({ ...x, ...v }));
 		}
 		table().grid.refresh();
@@ -146,17 +169,18 @@ P.add_variants_dialog = function (frm) {
 	}
 
 	async function add() {
-		const rows = (table().df.data || []).filter((r) => r.item_code && flt(r.qty) > 0);
+		const template = d.get_value("template");
+		const rows = (table().df.data || [])
+			.filter((r) => r.item_code && flt(r.qty) > 0)
+			.map((r) => ({ item_code: r.item_code, qty: r.qty, rate: r.rate, margin: r.margin, offer: r.offer, template }));
 		if (!rows.length) return frappe.msgprint(__("No variant with a quantity to add."));
 		d.hide();
 		frappe.dom.freeze(__("Adding {0} variants...", [rows.length]));
 		try {
-			const template = d.get_value("template");
-			for (const r of rows) await P.add_item_row(frm, { ...r, template });
+			await P.add_rows(frm, rows);
 		} finally {
 			frappe.dom.unfreeze();
 		}
-		frm.refresh_field("items");
 		frappe.show_alert({ message: __("{0} variants added", [rows.length]), indicator: "green" });
 	}
 
@@ -166,7 +190,7 @@ P.add_variants_dialog = function (frm) {
 P.update_template_dialog = function (frm) {
 	const templates = [...new Set((frm.doc.items || []).map((r) => r.custom_variant_of).filter(Boolean))];
 	if (!templates.length) return frappe.msgprint(__("No variant rows in the items table yet. Use Add Variants first."));
-	const number = (fieldname, label) => ({ fieldname, label, fieldtype: "Data", description: __("Blank = keep as it is") });
+	const number = (fieldname, label, hidden) => ({ fieldname, label, hidden, fieldtype: "Data", description: __("Blank = keep as it is") });
 	const d = new frappe.ui.Dialog({
 		title: __("Update Template Rows"),
 		fields: [
@@ -174,33 +198,57 @@ P.update_template_dialog = function (frm) {
 			number("qty", __("Qty")),
 			number("rate", __("Rate")),
 			number("margin", __("Margin %")),
-			number("offer", __("Offer %")),
+			number("offer", __("Offer %"), !P.settings().offers),
 		],
 		primary_action_label: __("Update"),
 		primary_action: async (v) => {
-			const map = { qty: "qty", rate: "rate", margin: "custom_margin_percent", offer: "custom_offer_percent" };
 			const values = {};
-			for (const [key, field] of Object.entries(map)) {
+			for (const key of ["qty", "rate", "margin", "offer"]) {
 				const raw = (v[key] || "").toString().trim();
 				if (!raw) continue;
 				if (isNaN(Number(raw))) return frappe.msgprint(__("{0} must be a number.", [key]));
-				values[field] = flt(raw);
+				values[key] = flt(raw);
 			}
 			if (!Object.keys(values).length) return frappe.msgprint(__("Enter at least one value."));
 			const rows = frm.doc.items.filter((r) => r.custom_variant_of === v.template);
 			d.hide();
-			for (const r of rows) await frappe.model.set_value(r.doctype, r.name, values);
+			await P.load_gst(rows.map((r) => r.item_tax_template));
+			// written straight onto the rows: per-row triggers would re-apply price list rates one by one
+			rows.forEach((r) => {
+				if ("qty" in values) {
+					r.qty = values.qty;
+					r.stock_qty = values.qty * (flt(r.conversion_factor) || 1);
+					if ("received_qty" in r) r.received_qty = values.qty + flt(r.rejected_qty);
+				}
+				if ("rate" in values) {
+					Object.assign(r, { rate: values.rate, price_list_rate: values.rate, discount_percentage: 0, discount_amount: 0, margin_rate_or_amount: 0 });
+				}
+				if ("margin" in values) r.custom_margin_percent = values.margin;
+				if ("offer" in values) {
+					r.custom_offer_percent = values.offer;
+					r.__offer_set = 1;
+				}
+				if (P.settings().purchase_pricing) P.compute(frm, r);
+			});
+			P.after_bulk_change(frm);
 			frappe.show_alert({ message: __("{0} rows of {1} updated", [rows.length, v.template]), indicator: "green" });
 		},
 	});
 	d.show();
 };
 
+P.VARIANT_BUTTONS = ["Add Variants", "Update Template"];
+
 ["Purchase Order", "Purchase Receipt", "Purchase Invoice"].forEach((doctype) => {
 	frappe.ui.form.on(doctype, {
 		refresh(frm) {
-			if (frm.doc.docstatus !== 0 || !P.settings().variant_buttons) return;
 			const grid = frm.fields_dict.items.grid;
+			const show = frm.doc.docstatus === 0 && P.settings().variant_buttons;
+			if (!show) {
+				// buttons added while the document was a draft stay on the grid after submit
+				P.VARIANT_BUTTONS.forEach((label) => grid.custom_buttons?.[__(label)]?.addClass("hidden"));
+				return;
+			}
 			grid.add_custom_button(__("Add Variants"), () => P.add_variants_dialog(frm));
 			grid.add_custom_button(__("Update Template"), () => P.update_template_dialog(frm));
 		},

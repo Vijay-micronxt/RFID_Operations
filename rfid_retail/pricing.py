@@ -84,7 +84,17 @@ def plain_price(item_code, price_list):
 
 
 def item_tax_rows(item_code):
-	"""Taxes table rows of the item, else its template item, else its item group."""
+	"""Taxes table rows of the item, else its template item, else its item group (cached per request:
+	a document with 50+ rows of the same template asks once)."""
+	cache = getattr(frappe.local, "rfid_item_tax_rows", None)
+	if cache is None:
+		cache = frappe.local.rfid_item_tax_rows = {}
+	if item_code not in cache:
+		cache[item_code] = _item_tax_rows(item_code)
+	return cache[item_code]
+
+
+def _item_tax_rows(item_code):
 	iv = frappe.db.get_value("Item", item_code, ["variant_of", "item_group"], as_dict=True) or {}
 	for parent, ptype in ((item_code, "Item"), (iv.get("variant_of"), "Item"), (iv.get("item_group"), "Item Group")):
 		if not parent:
@@ -113,7 +123,7 @@ def gst_percent(row):
 		template = next((t.item_tax_template for t in item_tax_rows(row.item_code) if in_range(t, base)), None)
 	if not template or not frappe.get_meta("Item Tax Template").has_field("gst_rate"):  # gst_rate: India Compliance
 		return 0.0
-	return flt(frappe.db.get_value("Item Tax Template", template, "gst_rate"))
+	return flt(frappe.get_cached_value("Item Tax Template", template, "gst_rate"))
 
 
 # ---------------------------------------------------------------- columns
@@ -142,8 +152,30 @@ def ensure_fields():
 			)
 	if fields:
 		create_custom_fields(fields, update=True)
+	if cint(settings.purchase_pricing) and cint(settings.offers_enabled):
+		fit_grid_columns()
 	if cint(settings.offers_enabled):
 		backfill_mrp()
+
+
+# Item grids show 10 column units; narrower standard columns leave room for Margin / MRP / Offer %
+# / Offer Price. (fieldname, columns); 0 = out of the grid (still in the row form).
+GRID_COLUMNS = {
+	"Purchase Invoice Item": [("item_code", 3), ("qty", 1), ("rate", 1), ("amount", 1)],
+	"Purchase Receipt Item": [("item_code", 2), ("qty", 1), ("rejected_qty", 1), ("rate", 1), ("net_amount", 1)],
+	"Purchase Order Item": [("item_code", 2), ("schedule_date", 1), ("qty", 1), ("uom", 0), ("rate", 1), ("amount", 1)],
+}
+
+
+def fit_grid_columns():
+	from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+
+	for doctype, cols in GRID_COLUMNS.items():
+		for fieldname, columns in cols:
+			if columns:
+				make_property_setter(doctype, fieldname, "columns", columns, "Int", validate_fields_for_doctype=False)
+			else:
+				make_property_setter(doctype, fieldname, "in_list_view", 0, "Check", validate_fields_for_doctype=False)
 
 
 def _pricing_fields(doctype, offers):
