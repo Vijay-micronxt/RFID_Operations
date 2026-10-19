@@ -18,6 +18,8 @@ class RFIDSettings(Document):
 			self.device_offline_minutes = 15
 		self.validate_item_codes()
 		self.validate_labels()
+		if (self.mrp_round_up_to or 0) < 1:
+			self.mrp_round_up_to = 1
 
 	def validate_item_codes(self):
 		if not self.item_codes_enabled:
@@ -37,4 +39,8 @@ class RFIDSettings(Document):
 		from rfid_retail.setup.install import grant_counter_permissions
 
 		grant_counter_permissions()
-		frappe.clear_cache()  # boot info carries the item code / label switches
+		if self.purchase_pricing or self.offers_enabled or self.variant_buttons:
+			from rfid_retail.pricing import ensure_fields
+
+			ensure_fields()
+		frappe.clear_cache()  # boot info carries the item code / label / pricing switches

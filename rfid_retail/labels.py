@@ -201,6 +201,19 @@ def item_price(item_code, price_list):
 	return 0
 
 
+def item_mrp(item_code, price_list):
+	"""MRP of the selling price when offers are on (RFID Settings > Purchase Pricing), else 0."""
+	from rfid_retail.pricing import offers_on, plain_price
+
+	if not price_list or not offers_on():
+		return 0
+	for code in (item_code, frappe.get_cached_value("Item", item_code, "variant_of")):
+		price = code and plain_price(code, price_list)
+		if price:
+			return flt(price.get("custom_mrp"))
+	return 0
+
+
 def item_details(item_code):
 	"""Short variant text for a label: 'Red / 40'."""
 	values = frappe.get_all(
@@ -233,6 +246,8 @@ def fill_row(row, price_list=None):
 		row.barcode = row.component or row.serial_no or item_barcode(row.item_code) or row.item_code
 	if not flt(row.rate):
 		row.rate = item_price(row.item_code, price_list)
+	if not flt(row.get("mrp")):
+		row.mrp = item_mrp(row.item_code, price_list)
 	if row.serial_no:
 		row.copies = 1  # one physical piece, one label
 	return row

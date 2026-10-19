@@ -67,10 +67,16 @@
    "fieldtype": "Currency",
    "label": "Price",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "mrp",
+   "fieldtype": "Currency",
+   "label": "MRP",
+   "description": "With offers on (RFID Settings): the MRP before the offer. Labels print it struck through when it is above the price."
   }
  ],
  "links": [],
- "modified": "2026-10-16 15:44:09.929215",
+ "modified": "2026-10-19 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "Sticker Print Job Item",
@@ -87,6 +93,7 @@
   "component",
   "details",
   "barcode",
-  "rate"
+  "rate",
+  "mrp"
  ]
 }

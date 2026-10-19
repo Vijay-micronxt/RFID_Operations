@@ -4,6 +4,13 @@
 	const previous = settings.onload;
 	settings.onload = function (listview) {
 		if (previous) previous(listview);
+		if ((frappe.boot.rfid_retail || {}).offers && frappe.model.can_write("Item Price")) {
+			listview.page.add_actions_menu_item(__("Set Offer %"), () => {
+				const items = listview.get_checked_items(true);
+				if (!items.length) return frappe.msgprint(__("Select items first."));
+				rfid_retail.pricing.offer_dialog(items, () => listview.refresh());
+			});
+		}
 		if (!frappe.model.can_create("Sticker Print Job")) return;
 		listview.page.add_actions_menu_item(__("Print Stickers"), () => {
 			const items = listview.get_checked_items(true);

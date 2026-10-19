@@ -268,12 +268,29 @@ _tagged_stock_events = {
 	"on_trash": "rfid_retail.overrides.stock.on_trash",
 }
 
+# Purchase pricing and offers (RFID Settings > Purchase Pricing): each switch off = no-op
+_purchase_pricing_events = {
+	"before_validate": "rfid_retail.overrides.purchase.before_validate",
+	"validate": "rfid_retail.overrides.purchase.validate",
+}
+_priced_inward_events = {
+	**_tagged_stock_events,
+	"before_validate": "rfid_retail.overrides.purchase.before_validate",
+	"validate": ["rfid_retail.overrides.purchase.validate", _tagged_stock_events["validate"]],
+	# prices first, so a sticker job made on submit prints the new price
+	"on_submit": ["rfid_retail.overrides.purchase.on_submit", *_tagged_stock_events["on_submit"]],
+	"on_cancel": [_tagged_stock_events["on_cancel"], "rfid_retail.overrides.purchase.on_cancel"],
+}
+
 doc_events = {
 	"Sales Invoice": _rfid_invoice_events,
 	"POS Invoice": _rfid_invoice_events,
-	"Purchase Receipt": _tagged_stock_events,
-	"Purchase Invoice": _tagged_stock_events,
+	"Purchase Order": _purchase_pricing_events,
+	"Purchase Receipt": _priced_inward_events,
+	"Purchase Invoice": _priced_inward_events,
 	"Stock Entry": _tagged_stock_events,
+	"Item Price": {"validate": "rfid_retail.overrides.item_price.validate"},
+	"Item Attribute": {"on_update": "rfid_retail.overrides.item_attribute.on_update"},
 	"Stock Reconciliation": _inward_events,
 	# item codes and barcodes: own switches, independent of RFID
 	"Item": {
@@ -281,7 +298,7 @@ doc_events = {
 	},
 }
 
-app_include_js = "rfid_retail_desk.bundle.js"
+app_include_js = ["rfid_retail_desk.bundle.js", "rfid_retail_pricing.bundle.js"]
 doctype_list_js = {
 	"Item": "public/js/item_list.js",
 	"Serial No": "public/js/serial_no_list.js",

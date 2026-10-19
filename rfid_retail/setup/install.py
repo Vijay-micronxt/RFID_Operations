@@ -14,6 +14,13 @@ def after_migrate():
 	seed_station_roles()
 	seed_setting_defaults()
 	grant_counter_permissions()
+	ensure_pricing_fields()
+
+
+def ensure_pricing_fields():
+	from rfid_retail.pricing import ensure_fields
+
+	ensure_fields()
 
 
 def seed_setting_defaults():

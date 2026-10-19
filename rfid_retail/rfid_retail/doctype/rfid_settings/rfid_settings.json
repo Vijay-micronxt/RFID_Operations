@@ -54,7 +54,20 @@
   "label_gap_mm",
   "label_price_list",
   "label_show_price",
-  "label_footer"
+  "label_footer",
+  "pricing_tab",
+  "purchase_pricing",
+  "pricing_section",
+  "default_margin",
+  "cb_pricing",
+  "mrp_round_up_to",
+  "offer_section",
+  "offers_enabled",
+  "entry_section",
+  "purchase_import_fill",
+  "variant_buttons",
+  "cb_entry",
+  "attribute_range_sync"
  ],
  "fields": [
   {
@@ -361,11 +374,87 @@
    "fieldtype": "Data",
    "label": "Footer line",
    "description": "e.g. store name. Blank = company name."
+  },
+  {
+   "fieldname": "pricing_tab",
+   "fieldtype": "Tab Break",
+   "label": "Purchase Pricing"
+  },
+  {
+   "fieldname": "purchase_pricing",
+   "fieldtype": "Check",
+   "label": "Work out MRP on purchase rows",
+   "default": "0",
+   "description": "Purchase Order / Receipt / Invoice rows get MRP = rate x (1 + GST %) x (1 + Margin %), rounded up. On submit of a Purchase Receipt or Invoice the MRP becomes the item's selling price and the rate its buying price; cancel puts the old prices back. Adds the columns to the purchase item tables."
+  },
+  {
+   "fieldname": "pricing_section",
+   "fieldtype": "Section Break",
+   "depends_on": "purchase_pricing"
+  },
+  {
+   "fieldname": "default_margin",
+   "fieldtype": "Percent",
+   "label": "Default margin %",
+   "default": "10"
+  },
+  {
+   "fieldname": "cb_pricing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "mrp_round_up_to",
+   "fieldtype": "Int",
+   "label": "Round MRP up to a multiple of",
+   "default": "10",
+   "description": "10: 647 becomes 650. 1: rupees only."
+  },
+  {
+   "fieldname": "offer_section",
+   "fieldtype": "Section Break",
+   "label": "Offers"
+  },
+  {
+   "fieldname": "offers_enabled",
+   "fieldtype": "Check",
+   "label": "Offers on MRP",
+   "default": "0",
+   "description": "Selling Item Prices get MRP and Offer %; the selling rate is MRP less the offer. Purchase rows carry the offer, labels print the MRP struck through with the offer price, and Item / Item list get Set Offer."
+  },
+  {
+   "fieldname": "entry_section",
+   "fieldtype": "Section Break",
+   "label": "Purchase entry"
+  },
+  {
+   "fieldname": "purchase_import_fill",
+   "fieldtype": "Check",
+   "label": "Fill rows from Item Name and the item's tax",
+   "default": "0",
+   "description": "Purchase rows with only an Item Name (Data Import) get the item with that name; rows without an Item Tax Template get one from the item's Taxes table even when its Tax Category is blank."
+  },
+  {
+   "fieldname": "variant_buttons",
+   "fieldtype": "Check",
+   "label": "Add Variants buttons",
+   "default": "0",
+   "description": "Add Variants (all variants of a template in one go) and Update Template on purchase item tables."
+  },
+  {
+   "fieldname": "cb_entry",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "attribute_range_sync",
+   "fieldtype": "Check",
+   "label": "Keep numeric attribute ranges in step",
+   "default": "0",
+   "description": "Saving a numeric Item Attribute copies its range into every item's attribute row, so the Multiple Variants dialog does not build a checkbox per number."
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-16 13:00:00.000000",
+ "modified": "2026-10-19 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Settings",
