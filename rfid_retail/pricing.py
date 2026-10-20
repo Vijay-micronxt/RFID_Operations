@@ -129,13 +129,14 @@ def gst_percent(row):
 # ---------------------------------------------------------------- columns
 
 
-def ensure_fields():
+def ensure_fields(settings=None):
 	"""Add the columns for the switches that are on. Never removes columns (they hold data)."""
-	settings = get_settings()
+	settings = settings or get_settings()
+	margin = 10.0 if settings.default_margin is None else flt(settings.default_margin)
 	fields = {}
 	if cint(settings.purchase_pricing):
 		for dt in PURCHASE_ITEM_DOCTYPES:
-			fields.setdefault(dt, []).extend(_pricing_fields(dt, cint(settings.offers_enabled)))
+			fields.setdefault(dt, []).extend(_pricing_fields(dt, cint(settings.offers_enabled), margin))
 	if cint(settings.offers_enabled):
 		fields["Item Price"] = [
 			{"fieldname": "custom_mrp", "fieldtype": "Currency", "label": "MRP", "options": "currency",
@@ -178,10 +179,10 @@ def fit_grid_columns():
 				make_property_setter(doctype, fieldname, "in_list_view", 0, "Check", validate_fields_for_doctype=False)
 
 
-def _pricing_fields(doctype, offers):
+def _pricing_fields(doctype, offers, margin):
 	fields = [
 		{"fieldname": "custom_margin_percent", "fieldtype": "Percent", "label": "Margin %", "insert_after": "rate",
-			"in_list_view": 1, "columns": 1, "default": str(default_margin())},
+			"in_list_view": 1, "columns": 1, "default": str(margin)},
 		{"fieldname": "custom_gst_percent", "fieldtype": "Percent", "label": "GST %", "read_only": 1,
 			"insert_after": "custom_margin_percent"},
 		{"fieldname": "custom_selling_price", "fieldtype": "Currency", "label": "MRP", "read_only": 1,
