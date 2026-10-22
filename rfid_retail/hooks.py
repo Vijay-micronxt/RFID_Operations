@@ -291,6 +291,17 @@ doc_events = {
 	"Stock Entry": _tagged_stock_events,
 	"Item Price": {"validate": "rfid_retail.overrides.item_price.validate"},
 	"Item Attribute": {"on_update": "rfid_retail.overrides.item_attribute.on_update"},
+	# counters may be reset on a live site; never hand out a taken name
+	**{
+		doctype: {"before_naming": "rfid_retail.naming.sync_series"}
+		for doctype in (
+			"RFID Basket",
+			"RFID Exception",
+			"RFID Tag Assignment",
+			"RFID Tag Event",
+			"RFID Audit Session",
+		)
+	},
 	"Stock Reconciliation": _inward_events,
 	# item codes and barcodes: own switches, independent of RFID
 	"Item": {
