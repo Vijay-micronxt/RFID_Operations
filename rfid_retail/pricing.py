@@ -1,7 +1,9 @@
 """Purchase pricing and offers (RFID Settings > Purchase Pricing). Independent of the RFID master switch.
 
 MRP         = purchase rate per stock unit x (1 + GST %) x (1 + Margin %), rupee-rounded, then up to the
-              next multiple of "Round MRP up to" (10: 647 -> 650).
+              next multiple of "Round MRP up to" (10: 647 -> 650). An MRP typed on the row is kept as typed
+              and Margin % is worked back from it: MRP / (rate x (1 + GST %)) - 1.
+Cost Price  = purchase rate per stock unit x (1 + GST %): shown on the row and on the buying Item Price.
 Offer Price = MRP less Offer %, rupee-rounded: the rate the item sells at (selling Item Price rate).
 
 The columns these need are added only when a switch is on, so other sites see no change.
@@ -46,6 +48,18 @@ def mrp_for(base_rate, gst, margin):
 	return round_up(flt(base_rate) * (1 + flt(gst) / 100.0) * (1 + flt(margin) / 100.0))
 
 
+def margin_for(base_rate, gst, mrp):
+	"""Margin % that gives this MRP (reverse of mrp_for, without the rounding)."""
+	landed = cost_price(base_rate, gst)
+	if landed <= 0 or flt(mrp) <= 0:
+		return 0.0
+	return flt((flt(mrp) / landed - 1) * 100, 2)
+
+
+def cost_price(base_rate, gst):
+	return flt(flt(base_rate) * (1 + flt(gst) / 100.0), 2) if flt(base_rate) > 0 else 0.0
+
+
 def offer_price(mrp, offer):
 	if flt(mrp) <= 0:
 		return 0
@@ -65,8 +79,11 @@ def buying_price_list():
 def plain_price(item_code, price_list):
 	"""The item's general price on a list (no customer, supplier or batch), newest first."""
 	fields = ["name", "price_list_rate"]
-	if frappe.get_meta("Item Price").has_field("custom_mrp"):
+	meta = frappe.get_meta("Item Price")
+	if meta.has_field("custom_mrp"):
 		fields += ["custom_mrp", "custom_offer_percent"]
+	if meta.has_field("custom_cost_price"):
+		fields += ["custom_cost_price"]
 	rows = frappe.get_all(
 		"Item Price",
 		filters={
@@ -137,14 +154,20 @@ def ensure_fields(settings=None):
 	if cint(settings.purchase_pricing):
 		for dt in PURCHASE_ITEM_DOCTYPES:
 			fields.setdefault(dt, []).extend(_pricing_fields(dt, cint(settings.offers_enabled), margin))
-	if cint(settings.offers_enabled):
+	if cint(settings.purchase_pricing):
 		fields["Item Price"] = [
+			{"fieldname": "custom_cost_price", "fieldtype": "Currency", "label": "Cost Price", "options": "currency",
+				"insert_after": "price_list_rate", "read_only": 1, "depends_on": "eval:doc.buying",
+				"description": "Rate + item GST, from the last purchase"},
+		]
+	if cint(settings.offers_enabled):
+		fields.setdefault("Item Price", []).extend([
 			{"fieldname": "custom_mrp", "fieldtype": "Currency", "label": "MRP", "options": "currency",
 				"insert_after": "currency", "depends_on": "eval:doc.selling", "in_list_view": 1,
 				"description": "Rate = MRP less Offer %"},
 			{"fieldname": "custom_offer_percent", "fieldtype": "Percent", "label": "Offer %",
 				"insert_after": "custom_mrp", "depends_on": "eval:doc.selling", "in_list_view": 1},
-		]
+		])
 	if cint(settings.variant_buttons):
 		for dt in PURCHASE_ITEM_DOCTYPES:
 			fields.setdefault(dt, []).append(
@@ -185,15 +208,20 @@ def _pricing_fields(doctype, offers, margin):
 			"in_list_view": 1, "columns": 1, "default": str(margin)},
 		{"fieldname": "custom_gst_percent", "fieldtype": "Percent", "label": "GST %", "read_only": 1,
 			"insert_after": "custom_margin_percent"},
-		{"fieldname": "custom_selling_price", "fieldtype": "Currency", "label": "MRP", "read_only": 1,
-			"insert_after": "custom_gst_percent", "in_list_view": 1, "columns": 1,
-			"description": "Rate x (1 + GST %) x (1 + Margin %), rounded up"},
+		{"fieldname": "custom_cost_price", "fieldtype": "Currency", "label": "Cost Price", "read_only": 1,
+			"insert_after": "custom_gst_percent", "options": "currency",
+			"description": "Rate + GST %, per stock unit"},
+		{"fieldname": "custom_selling_price", "fieldtype": "Currency", "label": "MRP", "read_only": 0,
+			"insert_after": "custom_cost_price", "in_list_view": 1, "columns": 1,
+			"description": "Rate x (1 + GST %) x (1 + Margin %), rounded up. Type an MRP to keep it: Margin % is worked out from it"},
+		{"fieldname": "custom_mrp_manual", "fieldtype": "Check", "label": "MRP Typed", "hidden": 1,
+			"insert_after": "custom_selling_price"},
 	]
-	after = "custom_selling_price"
+	after = "custom_mrp_manual"
 	if offers:
 		fields += [
 			{"fieldname": "custom_offer_percent", "fieldtype": "Percent", "label": "Offer %",
-				"insert_after": "custom_selling_price", "in_list_view": 1, "columns": 1,
+				"insert_after": "custom_mrp_manual", "in_list_view": 1, "columns": 1,
 				"description": "Sale discount on MRP. A new row starts with the item's current offer"},
 			{"fieldname": "custom_offer_price", "fieldtype": "Currency", "label": "Offer Price", "read_only": 1,
 				"insert_after": "custom_offer_percent", "in_list_view": 1, "columns": 1,
