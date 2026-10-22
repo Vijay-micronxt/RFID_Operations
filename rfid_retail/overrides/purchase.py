@@ -110,6 +110,9 @@ def set_row_prices(doc):
 		base = flt(row.base_rate) / (flt(row.conversion_factor) or 1)
 		if row.meta.has_field("custom_cost_price"):
 			row.custom_cost_price = cost_price(base, row.custom_gst_percent)
+		if frappe.flags.in_import and flt(row.get("custom_selling_price")) > 0 and row.meta.has_field("custom_mrp_manual"):
+			# Data Import has no form to flag a typed MRP: an MRP in the file is a typed MRP
+			row.custom_mrp_manual = 1
 		if row.get("custom_mrp_manual") and flt(row.custom_selling_price) > 0:
 			# MRP typed on the row: kept as it is, margin follows it
 			row.custom_selling_price = flt(row.custom_selling_price, 2)
