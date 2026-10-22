@@ -10,11 +10,13 @@ from frappe.utils import flt
 
 from rfid_retail.pricing import (
 	buying_price_list,
+	cost_price,
 	default_margin,
 	gst_percent,
 	import_fill_on,
 	in_range,
 	item_tax_rows,
+	margin_for,
 	mrp_for,
 	offer_price,
 	offers_on,
@@ -106,7 +108,16 @@ def set_row_prices(doc):
 			row.custom_offer_percent = flt(current.custom_offer_percent) if current else 0
 		row.custom_gst_percent = gst_percent(row)
 		base = flt(row.base_rate) / (flt(row.conversion_factor) or 1)
-		row.custom_selling_price = mrp_for(base, row.custom_gst_percent, row.custom_margin_percent)
+		if row.meta.has_field("custom_cost_price"):
+			row.custom_cost_price = cost_price(base, row.custom_gst_percent)
+		if row.get("custom_mrp_manual") and flt(row.custom_selling_price) > 0:
+			# MRP typed on the row: kept as it is, margin follows it
+			row.custom_selling_price = flt(row.custom_selling_price, 2)
+			row.custom_margin_percent = margin_for(base, row.custom_gst_percent, row.custom_selling_price)
+		else:
+			if row.meta.has_field("custom_mrp_manual"):
+				row.custom_mrp_manual = 0
+			row.custom_selling_price = mrp_for(base, row.custom_gst_percent, row.custom_margin_percent)
 		if row.meta.has_field("custom_offer_price"):
 			row.custom_offer_price = offer_price(row.custom_selling_price, row.custom_offer_percent)
 
@@ -127,7 +138,10 @@ def set_item_prices(doc):
 	for code, row in last.items():
 		buying = round(flt(row.base_rate) / (flt(row.conversion_factor) or 1), 2)
 		if buying > 0:
-			prev = _upsert_price(code, buying_price_list(), {"price_list_rate": buying})
+			values = {"price_list_rate": buying}
+			if frappe.get_meta("Item Price").has_field("custom_cost_price"):
+				values["custom_cost_price"] = flt(row.get("custom_cost_price")) or cost_price(buying, row.get("custom_gst_percent"))
+			prev = _upsert_price(code, buying_price_list(), values)
 			row.db_set("custom_prev_buying_price", prev, update_modified=False)
 
 		mrp = flt(row.custom_selling_price)
@@ -150,7 +164,12 @@ def _upsert_price(item_code, price_list, values):
 		price.insert(ignore_permissions=True)
 		return "new"
 	prev = json.dumps(
-		{"rate": flt(ex.price_list_rate), "mrp": flt(ex.get("custom_mrp")), "offer": flt(ex.get("custom_offer_percent"))}
+		{
+			"rate": flt(ex.price_list_rate),
+			"mrp": flt(ex.get("custom_mrp")),
+			"offer": flt(ex.get("custom_offer_percent")),
+			"cost": flt(ex.get("custom_cost_price")),
+		}
 	)
 	if any(flt(ex.get(k)) != flt(v) for k, v in values.items()):
 		price = frappe.get_doc("Item Price", ex.name)
@@ -178,13 +197,13 @@ def _restore(item_code, price_list, prev, rate_set):
 	if prev == "new":
 		frappe.delete_doc("Item Price", ex.name, ignore_permissions=True)
 		return
-	if prev.startswith("{"):
-		old = json.loads(prev)
-		values = {"price_list_rate": old["rate"], "custom_mrp": old.get("mrp") or old["rate"], "custom_offer_percent": old.get("offer") or 0}
-	else:  # saved before offers existed: a plain rate
-		values = {"price_list_rate": flt(prev), "custom_mrp": flt(prev), "custom_offer_percent": 0}
-	if not frappe.db.get_value("Price List", price_list, "selling") or not ex.get("name") or "custom_mrp" not in ex:
-		values = {"price_list_rate": values["price_list_rate"]}
+	old = json.loads(prev) if prev.startswith("{") else {"rate": flt(prev)}  # plain rate: saved before offers existed
+	values = {"price_list_rate": old["rate"]}
+	if frappe.db.get_value("Price List", price_list, "selling"):
+		if "custom_mrp" in ex:
+			values.update({"custom_mrp": old.get("mrp") or old["rate"], "custom_offer_percent": old.get("offer") or 0})
+	elif "custom_cost_price" in ex:
+		values["custom_cost_price"] = old.get("cost") or 0
 	price = frappe.get_doc("Item Price", ex.name)
 	price.update(values)
 	price.save(ignore_permissions=True)

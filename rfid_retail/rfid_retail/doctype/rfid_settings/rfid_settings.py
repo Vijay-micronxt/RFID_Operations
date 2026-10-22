@@ -42,5 +42,5 @@ class RFIDSettings(Document):
 		if self.purchase_pricing or self.offers_enabled or self.variant_buttons:
 			from rfid_retail.pricing import ensure_fields
 
-			ensure_fields()
+			ensure_fields(self)  # the cached settings still hold the switches as they were before this save
 		frappe.clear_cache()  # boot info carries the item code / label / pricing switches

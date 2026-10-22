@@ -1,5 +1,7 @@
 // Purchase pricing and offers (RFID Settings > Purchase Pricing), each part behind its switch:
-//   MRP         = rate x (1 + GST %) x (1 + Margin %), rounded up to a multiple of "Round MRP up to"
+//   MRP         = rate x (1 + GST %) x (1 + Margin %), rounded up to a multiple of "Round MRP up to";
+//                 an MRP typed on the row is kept and Margin % = MRP / (rate x (1 + GST %)) - 1
+//   Cost Price  = rate x (1 + GST %)
 //   Offer Price = MRP less Offer %
 // plus "Add Variants" (all variants of a template at once) and "Update Template" on purchase item tables,
 // and Set Offer on Item / Item list / Item Price.
@@ -35,14 +37,36 @@ P.load_gst = async function (templates) {
 	rows.forEach((r) => (P.gst_cache[r.name] = flt(r.gst_rate)));
 };
 
-// MRP and offer price of one row, written straight onto it (no triggers); GST rates must be loaded
+// Cost price, MRP (or Margin % for a typed MRP) and offer price of one row, written straight onto it
+// (no triggers); GST rates must be loaded
 P.compute = function (frm, row) {
 	const gst = row.item_tax_template ? flt(P.gst_cache[row.item_tax_template]) : flt(row.custom_gst_percent);
 	const margin = P.is_blank(row.custom_margin_percent) ? P.default_margin() : flt(row.custom_margin_percent);
 	const base = (flt(row.rate) * flt(frm.doc.conversion_rate || 1)) / (flt(row.conversion_factor) || 1);
+	const cost = base > 0 ? flt(base * (1 + gst / 100), 2) : 0;
 	row.custom_gst_percent = gst;
-	row.custom_selling_price = base > 0 ? P.round_up(base * (1 + gst / 100) * (1 + margin / 100)) : 0;
+	row.custom_cost_price = cost;
+	if (row.custom_mrp_manual && flt(row.custom_selling_price) > 0) {
+		row.custom_margin_percent = cost > 0 ? flt((flt(row.custom_selling_price) / cost - 1) * 100, 2) : 0;
+	} else {
+		row.custom_mrp_manual = 0;
+		row.custom_margin_percent = margin;
+		row.custom_selling_price = base > 0 ? P.round_up(cost * (1 + margin / 100)) : 0;
+	}
 	row.custom_offer_price = P.offer_price(row.custom_selling_price, row.custom_offer_percent);
+};
+
+// Rate or Margin % changed by the user: MRP is worked out again from the formula
+P.formula_prices = function (frm, cdt, cdn) {
+	locals[cdt][cdn].custom_mrp_manual = 0;
+	return P.row_prices(frm, cdt, cdn);
+};
+
+// MRP typed: kept as it is, Margin % follows it; cleared MRP goes back to the formula
+P.mrp_typed = function (frm, cdt, cdn) {
+	const row = locals[cdt][cdn];
+	row.custom_mrp_manual = flt(row.custom_selling_price) > 0 ? 1 : 0;
+	return P.row_prices(frm, cdt, cdn);
 };
 
 P.row_prices = async function (frm, cdt, cdn) {
@@ -93,6 +117,7 @@ P.add_rows = async function (frm, rows) {
 		Object.keys(d).forEach((k) => !skip.has(k) && (row[k] = d[k]));
 		if (src.template) row.custom_variant_of = src.template;
 		row.custom_margin_percent = P.is_blank(src.margin) ? P.default_margin() : flt(src.margin);
+		row.custom_mrp_manual = 0;
 		if (P.settings().offers) {
 			row.custom_offer_percent = flt(src.offer);
 			row.__offer_set = 1; // the dialog value wins, also 0
@@ -224,6 +249,7 @@ P.update_template_dialog = function (frm) {
 					Object.assign(r, { rate: values.rate, price_list_rate: values.rate, discount_percentage: 0, discount_amount: 0, margin_rate_or_amount: 0 });
 				}
 				if ("margin" in values) r.custom_margin_percent = values.margin;
+				if ("rate" in values || "margin" in values) r.custom_mrp_manual = 0;
 				if ("offer" in values) {
 					r.custom_offer_percent = values.offer;
 					r.__offer_set = 1;
@@ -255,8 +281,9 @@ P.VARIANT_BUTTONS = ["Add Variants", "Update Template"];
 	});
 	frappe.ui.form.on(`${doctype} Item`, {
 		item_code: (frm, cdt, cdn) => P.settings().purchase_pricing && P.current_offer(frm, cdt, cdn),
-		rate: P.row_prices,
-		custom_margin_percent: P.row_prices,
+		rate: P.formula_prices,
+		custom_margin_percent: P.formula_prices,
+		custom_selling_price: P.mrp_typed,
 		custom_offer_percent: P.offer_changed,
 		item_tax_template: P.row_prices,
 		conversion_factor: P.row_prices,
