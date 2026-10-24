@@ -173,11 +173,18 @@ def on_submit(doc, method=None):
 			for entry in _manifest(row):
 				_sell_tag(doc, row, entry["tag"])
 	for item_code, short, warehouse in doc.flags.rfid_untagged_sales or []:
-		rfid.log_exception("Barcode Fallback",
-			_("{0} x {1} sold on {2} without reading their tags. {0} tag(s) of {1} in {3} now stand for stock "
-				"that is gone; remove those tags or mark them lost after the stock count.").format(
-				short, item_code, doc.name, warehouse),
-			severity="Low", pos_profile=doc.get("pos_profile"), reference_doctype=doc.doctype, reference_name=doc.name)
+		# Stock is already reduced here: more tags than stock means tagged pieces went out unread.
+		extra = rfid.count_item_tags(item_code, warehouse) - cint(flt(frappe.db.get_value("Bin",
+			{"item_code": item_code, "warehouse": warehouse}, "actual_qty")))
+		if extra > 0:
+			message = _("{0} x {1} sold on {2} without reading their tags. {3} tag(s) of {1} in {4} now stand for "
+				"stock that is gone; remove those tags or mark them lost after the stock count.").format(
+				short, item_code, doc.name, extra, warehouse)
+		else:
+			message = _("{0} x {1} sold on {2} without reading tags (untagged stock in {3}).").format(
+				short, item_code, doc.name, warehouse)
+		rfid.log_exception("Barcode Fallback", message, severity="Medium" if extra > 0 else "Low",
+			pos_profile=doc.get("pos_profile"), reference_doctype=doc.doctype, reference_name=doc.name)
 	if doc.get("custom_rfid_basket"):
 		frappe.db.set_value("RFID Basket", doc.custom_rfid_basket, {"status": "Billed", "sales_invoice": doc.name, "customer": doc.customer})
 

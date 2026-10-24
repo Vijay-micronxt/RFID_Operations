@@ -116,6 +116,8 @@
 		const opts = RFID.devices.filter((d) => d.device_type === sel.dataset.type);
 		sel.innerHTML = '<option value="">None</option>' + opts.map((d) => `<option>${esc(d.name)}</option>`).join("");
 		if (opts.length) sel.value = opts[0].name;
+		// Device pickers only matter once such devices are registered (RFID Device).
+		sel.closest(".field[hidden]")?.toggleAttribute("hidden", !opts.length);
 	});
 
 	// ------------------------------------------------------------ tag garments
@@ -645,7 +647,7 @@
 
 	// ------------------------------------------------------------ stock count
 	// Every scan is uploaded at once; the right panel is a live checklist of what should be in the store.
-	const A = { session: null, area: "Sales Floor" };
+	const A = { session: null };
 	const store = {
 		get: () => {
 			try {
@@ -712,7 +714,7 @@
 							"warn"
 						)}</div>
 						<a class="btn ghost" href="/app/rfid-audit-session/${encodeURIComponent(s.name)}">${icon("open_in_new", "small")}Open full result to note what happened</a>`
-					: `<div class="explain">${icon("info")}<span>Scan every tag in the store. Each garment below turns green when all its pieces are scanned. When you are done, press <b>Finish count</b>.</span></div>`
+					: `<div class="explain">${icon("info")}<span>Scan every tag in this warehouse. Each garment below turns green when all its pieces are scanned. When you are done, press <b>Finish count</b>.</span></div>`
 			}
 			${
 				compared
@@ -753,20 +755,12 @@
 		renderAudit(await call("audit.start", { warehouse: $("a-wh").value, device: $("a-device").value || null }));
 		$("a-scan").focus();
 	});
-	$("a-areas").addEventListener("click", (e) => {
-		const chip = e.target.closest("[data-area]");
-		if (!chip) return;
-		document.querySelectorAll("#a-areas .chip").forEach((c) => c.classList.toggle("on", c === chip));
-		A.area = chip.dataset.area;
-		$("a-scan").focus();
-	});
 	onScan($("a-scan"), async (codes) => {
 		renderAudit(
 			await call("audit.upload", {
 				session: A.session,
 				batch_id: `${$("a-device").value || "HH"}-${Date.now()}`,
 				codes,
-				area: A.area,
 				device: $("a-device").value || null,
 			})
 		);

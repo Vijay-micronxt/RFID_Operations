@@ -35,6 +35,10 @@ TAG_HOLD = "Hold"
 UNUSABLE = (TAG_DAMAGED, TAG_LOST, TAG_RETIRED)
 # Tags that stand for a unit still in stock
 IN_STOCK_TAG = (TAG_ASSIGNED, TAG_HOLD)
+# Assignment close reasons after which the garment is still in stock and needs a new tag
+RETAG_REASONS = ("Manual", "Tag Damaged", "Tag Lost", "Tag Replaced")
+# Documents whose rows keep the tags read for them (custom_rfid_tags)
+ROW_TAG_DOCTYPES = ("Purchase Receipt", "Purchase Invoice", "Stock Entry")
 
 
 # ---------------------------------------------------------------- lookups
@@ -296,6 +300,8 @@ def close_assignment(epc, reason, new_tag_status=TAG_AVAILABLE, remarks=None, ac
 	tag = frappe.get_doc("RFID Tag", normalize(epc), for_update=True)
 	previous = tag.status
 	snapshot = frappe._dict(tag.as_dict())
+	if tag.current_assignment and reason in RETAG_REASONS:
+		drop_from_source_row(tag.current_assignment, tag.name, remarks or reason)
 	if tag.current_assignment:
 		frappe.db.set_value(
 			"RFID Tag Assignment",
@@ -319,6 +325,54 @@ def close_assignment(epc, reason, new_tag_status=TAG_AVAILABLE, remarks=None, ac
 		reference_doctype=reference_doctype, reference_name=reference_name, amount=amount,
 		reason=remarks or reason)
 	return tag
+
+
+def _source_row(assignment):
+	src = frappe.db.get_value("RFID Tag Assignment", assignment, ["source_doctype", "source_name", "source_row"],
+		as_dict=True)
+	if not src or src.source_doctype not in ROW_TAG_DOCTYPES or not src.source_row:
+		return None, None
+	child = frappe.get_meta(src.source_doctype).get_field("items").options
+	row = frappe.db.get_value(child, {"name": src.source_row, "parent": src.source_name},
+		["name", "idx", "item_code", "custom_rfid_tags"], as_dict=True)
+	return src, row
+
+
+def _row_codes(row):
+	return [c for c in (normalize(x) for x in (row.custom_rfid_tags or "").replace(",", "\n").split()) if c]
+
+
+def drop_from_source_row(assignment, code, reason=None):
+	"""The tag came off a garment that is still in stock: take it off the inward row that read it,
+	so the row shows the piece as waiting for a tag again, and note it on the document's timeline."""
+	src, row = _source_row(assignment)
+	if not row:
+		return
+	codes = [c for c in _row_codes(row) if c != code]
+	frappe.db.set_value(frappe.get_meta(src.source_doctype).get_field("items").options, row.name,
+		{"custom_rfid_tags": "\n".join(codes) or None, "custom_rfid_tag_count": len(codes)}, update_modified=False)
+	_timeline(src.source_doctype, src.source_name,
+		_("RFID tag {0} taken off {1} (row {2}): {3}. The piece can be tagged again with the RFID Tags button.").format(
+			code, row.item_code, row.idx, reason or _("no reason given")))
+
+
+def add_to_source_row(assignment, code, note=None):
+	"""A replacement tag went on a piece of an inward row: show it on that row."""
+	src, row = _source_row(assignment)
+	if not row:
+		return
+	codes = _row_codes(row)
+	if code not in codes:
+		codes.append(code)
+	frappe.db.set_value(frappe.get_meta(src.source_doctype).get_field("items").options, row.name,
+		{"custom_rfid_tags": "\n".join(codes), "custom_rfid_tag_count": len(codes)}, update_modified=False)
+	if note:
+		_timeline(src.source_doctype, src.source_name, note)
+
+
+def _timeline(doctype, name, text):
+	frappe.get_doc({"doctype": "Comment", "comment_type": "Info", "reference_doctype": doctype,
+		"reference_name": name, "content": text}).insert(ignore_permissions=True)
 
 
 def reserve_tag(epc, doctype, name, row, item_code):

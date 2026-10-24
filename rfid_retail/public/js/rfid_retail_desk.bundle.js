@@ -91,13 +91,60 @@ RFID_TAG_DOCTYPES.forEach((doctype) => {
 			if (doctype === "Purchase Invoice" && !frm.doc.update_stock) return;
 			frm.add_custom_button(__("RFID Tags"), () => rfid_retail.tag_dialog(frm));
 		},
+		// Cancelling frees every tag this document put on garments: say so and ask again.
+		before_cancel(frm) {
+			if (!(frappe.boot.rfid_retail || {}).enabled) return;
+			return rfid_retail.confirm_cancel_tags(frm);
+		},
 	});
 });
+
+rfid_retail.confirm_cancel_tags = async function (frm) {
+	const impact = await frappe.xcall("rfid_retail.overrides.stock.cancel_impact", { doctype: frm.doctype, name: frm.doc.name });
+	if (!impact.tags) return;
+	const esc = frappe.utils.escape_html;
+	const list = impact.items.map((r) => `<li>${esc(r.item_name || r.item_code)} (${esc(r.item_code)}): <b>${r.tags}</b></li>`).join("");
+	await new Promise((resolve) => {
+		let answered = false;
+		const d = new frappe.ui.Dialog({
+			title: __("Cancel will free RFID tags"),
+			fields: [
+				{
+					fieldtype: "HTML",
+					options: `<div class="alert alert-warning" style="margin-bottom:8px">${__(
+						"Cancelling {0} frees all <b>{1}</b> RFID tag(s) put on its garments. Those garments stop counting as tagged stock and the tags can go on other garments.",
+						[esc(frm.doc.name), impact.tags]
+					)}</div><ul style="margin:0 0 8px 16px">${list}</ul><p class="text-muted small">${__(
+						"Only cancel if this document is wrong. To fix just a wrong tag, use Remove tags at the RFID station and tag the piece again with the RFID Tags button."
+					)}</p>`,
+				},
+			],
+			primary_action_label: __("Cancel and free tags"),
+			primary_action: () => {
+				answered = true;
+				d.hide();
+				resolve();
+			},
+			secondary_action_label: __("Keep document"),
+			secondary_action: () => d.hide(),
+		});
+		d.get_primary_btn().removeClass("btn-primary").addClass("btn-danger");
+		d.onhide = () => {
+			if (!answered) {
+				frappe.validated = false;
+				resolve();
+			}
+		};
+		d.show();
+	});
+};
 
 rfid_retail.tag_dialog = async function (frm) {
 	let rows = await frappe.xcall("rfid_retail.overrides.stock.row_tag_rows", { doctype: frm.doctype, name: frm.doc.name });
 	if (!rows.length) {
-		frappe.msgprint(__("No RFID item on this document. Tick RFID Tracked Garment on the item first."));
+		frappe.msgprint(
+			__("No row to tag here. Tick RFID Tracked Garment on the item first. Sets (suits and other multi-piece items) are tagged piece by piece at the Tag garments station.")
+		);
 		return;
 	}
 	const esc = frappe.utils.escape_html;
@@ -174,7 +221,9 @@ rfid_retail.tag_dialog = async function (frm) {
 		d.fields_dict.summary.$wrapper.html(`
 			<div style="display:flex;align-items:baseline;gap:12px;margin:4px 0">
 				<span style="font-size:32px;font-weight:700;color:var(--${color}-600)">${n} / ${need}</span>
-				<span class="text-muted">${esc(verb[S.row.direction])} · ${esc(place || "")}</span>
+				<span class="text-muted">${esc(verb[S.row.direction])} · ${esc(place || "")}${
+					S.row.done ? ` · ${esc(__("{0} tag(s) already on this row", [S.row.done]))}` : ""
+				}</span>
 			</div>
 			<div class="alert" style="margin:6px 0 4px;padding:8px 12px;border-radius:8px;background:var(--${color}-50);color:var(--${color}-700)">${esc(msg)}</div>`);
 		d.fields_dict.list.$wrapper.html(

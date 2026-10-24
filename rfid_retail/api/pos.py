@@ -51,6 +51,32 @@ def counter_config(pos_profile):
 
 
 @frappe.whitelist()
+def manual_add_check(item_code, pos_profile):
+	"""Picked by hand at a counter: how many units of the item in the counter's warehouse carry a tag
+	and how many do not. The cashier is warned only when both kinds are in stock (a tagged piece
+	should be read on the tray, not picked by hand). Never throws."""
+	from rfid_retail.settings import is_enabled
+
+	out = {"warn": False, "tagged": 0, "untagged": 0}
+	if not is_enabled() or not item_code or not rfid.is_rfid_item(item_code):
+		return out
+	warehouse = frappe.db.get_value("POS Profile", pos_profile, "warehouse")
+	if not warehouse:
+		return out
+	if rfid.has_serial(item_code):
+		serials = frappe.get_all("Serial No", {"item_code": item_code, "warehouse": warehouse, "status": "Active"},
+			pluck="name")
+		tagged = sum(1 for s in serials if rfid.active_assignment_for(serial_no=s))
+		untagged = len(serials) - tagged
+	else:
+		actual = cint(flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty")))
+		tagged = min(rfid.count_item_tags(item_code, warehouse), max(actual, 0))
+		untagged = max(actual - tagged, 0)
+	out.update(tagged=tagged, untagged=untagged, warn=bool(tagged and untagged), warehouse=warehouse)
+	return out
+
+
+@frappe.whitelist()
 def get_counters():
 	require_station("Billing")
 	profiles = frappe.get_all("POS Profile", filters={"disabled": 0}, fields=["name", "warehouse", "company"])

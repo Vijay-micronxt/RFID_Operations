@@ -170,15 +170,42 @@ def on_cancel(doc, method=None):
 	if not is_enabled():
 		return
 	# Tags this document put on garments: free them (the stock they stood for is gone again).
-	for asg in frappe.get_all("RFID Tag Assignment",
-		{"source_doctype": doc.doctype, "source_name": doc.name, "status": "Active"}, ["tag"]):
+	freed = frappe.get_all("RFID Tag Assignment",
+		{"source_doctype": doc.doctype, "source_name": doc.name, "status": "Active"}, ["tag", "item_code"])
+	for asg in freed:
 		rfid.close_assignment(asg.tag, "Inward Cancelled", action="Correction", reference_doctype=doc.doctype,
 			reference_name=doc.name, remarks=_("{0} cancelled").format(doc.name))
+	if freed:
+		per_item = {}
+		for asg in freed:
+			per_item.setdefault(asg.item_code, []).append(asg.tag)
+		doc.add_comment("Info", _("Cancelled by {0}: {1} RFID tag(s) freed for reuse - {2}").format(
+			frappe.utils.get_fullname(), len(freed),
+			"; ".join(f"{item}: {', '.join(tags)}" for item, tags in per_item.items())))
+	_flag_extra_tags(doc)
 	restore_tags(doc, ("Issued Out",))
 	for ev in _events(doc, ("Transferred",)):
 		tag = frappe.get_doc("RFID Tag", ev.tag, for_update=True)
 		if cint(tag.cycle) == cint(ev.cycle) and tag.current_assignment:
 			_move(ev.tag, ev.to_warehouse, ev.warehouse, (doc.doctype, doc.name))
+
+
+def _flag_extra_tags(doc):
+	"""Stock taken back by the cancel may still carry tags put on at the station (not through this
+	document). More tags than stock means some tags stand for nothing: raise it for the manager."""
+	seen = set()
+	for row in doc.get("items") or []:
+		key = (row.item_code, target_warehouse(row))
+		if key in seen or direction(doc, row) != IN or not rfid.is_item_level(row.item_code):
+			continue
+		seen.add(key)
+		extra = rfid.count_item_tags(*key) - cint(flt(frappe.db.get_value("Bin",
+			{"item_code": key[0], "warehouse": key[1]}, "actual_qty")))
+		if extra > 0:
+			rfid.log_exception("Untagged Stock",
+				_("{0} cancelled: {1} has {2} more tag(s) than stock in {3}. Find those tags in the stock count "
+					"and remove them.").format(doc.name, key[0], extra, key[1]),
+				severity="Medium", reference_doctype=doc.doctype, reference_name=doc.name)
 
 
 def on_trash(doc, method=None):
@@ -189,7 +216,7 @@ def on_trash(doc, method=None):
 def _events(doc, actions):
 	return frappe.get_all("RFID Tag Event",
 		{"reference_doctype": doc.doctype, "reference_name": doc.name, "action": ["in", actions]},
-		["tag", "action", "cycle", "item_code", "serial_no", "component", "warehouse", "to_warehouse"],
+		["tag", "action", "cycle", "assignment", "item_code", "serial_no", "component", "warehouse", "to_warehouse"],
 		order_by="creation asc")
 
 
@@ -204,10 +231,13 @@ def restore_tags(doc, actions):
 		reusable = tag.status == rfid.TAG_AVAILABLE and cint(tag.cycle) == cint(ev.cycle)
 		label = ev.component or ev.serial_no or ev.item_code
 		if reusable:
+			# keep the inward document that first tagged the unit, so cancelling that one still frees the tag
+			source = ev.assignment and frappe.db.get_value("RFID Tag Assignment", ev.assignment,
+				["source_doctype", "source_name", "source_row"])
 			frappe.db.savepoint("rfid_restore")
 			try:
 				rfid.assign_tag(ev.tag, ev.serial_no, ev.component, item_code=ev.item_code,
-					warehouse=ev.warehouse, source=(doc.doctype, doc.name),
+					warehouse=ev.warehouse, source=source if source and source[0] else (doc.doctype, doc.name),
 					remarks=_("Restored: {0} cancelled").format(doc.name))
 				continue
 			except frappe.ValidationError:
@@ -259,8 +289,12 @@ def _row_state(doc, row):
 		out["serials"] = serials
 		out["to_tag"] = len(serials)
 	elif way == IN:
-		tagged = frappe.db.count("RFID Tag Assignment", {"source_doctype": doc.doctype, "source_name": doc.name,
-			"source_row": row.name})
+		# Pieces still carrying their tag, or gone with it (sold, sent out). A tag taken off, lost or
+		# damaged leaves its piece in stock waiting for a new tag, so it can be tagged here again.
+		tagged = frappe.db.sql("""select count(*) from `tabRFID Tag Assignment`
+			where source_doctype = %s and source_name = %s and source_row = %s
+			and (status = 'Active' or ifnull(close_reason, '') not in %s)""",
+			(doc.doctype, doc.name, row.name, rfid.RETAG_REASONS))[0][0]
 		out["to_tag"] = max(min(qty - tagged, rfid.untagged_qty(row.item_code, target_warehouse(row))), 0)
 	else:
 		out["to_tag"] = max(qty - len(done), 0)
@@ -359,6 +393,19 @@ def assign_row_tags(doctype, name, row, codes):
 		"custom_rfid_tag_count": len(saved)}, update_modified=False)
 	return {"tagged": len(codes), "state": _row_state(frappe.get_doc(doctype, name), next(
 		r for r in frappe.get_doc(doctype, name).items if r.name == row))}
+
+
+@frappe.whitelist()
+def cancel_impact(doctype, name):
+	"""What cancelling this document does to RFID tags, for the warning shown before Cancel."""
+	if not is_enabled() or doctype not in TAGGED_DOCTYPES:
+		return {"tags": 0}
+	frappe.get_doc(doctype, name).check_permission("read")
+	rows = frappe.db.sql("""select a.item_code, i.item_name, count(*) as tags
+		from `tabRFID Tag Assignment` a left join `tabItem` i on i.name = a.item_code
+		where a.source_doctype = %s and a.source_name = %s and a.status = 'Active'
+		group by a.item_code, i.item_name order by i.item_name""", (doctype, name), as_dict=True)
+	return {"tags": sum(r.tags for r in rows), "items": rows}
 
 
 @frappe.whitelist()
