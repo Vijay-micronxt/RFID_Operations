@@ -63,6 +63,7 @@ def before_submit(doc, method=None):
 				basket_tags.setdefault(read.item_code, []).append(read.epc)
 
 	seen = set()
+	_check_untagged_stock(doc, basket_tags)
 	for row in rfid_rows(doc):
 		if not rfid.has_serial(row.item_code):
 			row.custom_rfid_manifest = json.dumps(_item_rows_tags(doc, row, basket_tags), separators=(",", ":"))
@@ -78,6 +79,33 @@ def before_submit(doc, method=None):
 			seen.add(serial_no)
 			manifest.append(_check_serial(doc, row, serial_no, basket_reads))
 		row.custom_rfid_manifest = json.dumps(manifest, separators=(",", ":"))
+
+
+def _check_untagged_stock(doc, basket_tags):
+	"""Scan required: units billed without a tag read must be units that have no tag. Selling more
+	than the untagged stock means a tagged piece went out without its tag being read."""
+	if not cint(setting("require_scan_for_sale")):
+		return
+	billed = {}
+	for row in rfid_rows(doc):
+		if rfid.has_serial(row.item_code):
+			continue
+		key = (row.item_code, row.warehouse)
+		billed[key] = billed.get(key, 0) + abs(cint(flt(row.get("stock_qty") or row.qty)))
+	for (item_code, warehouse), qty in billed.items():
+		short = qty - len(basket_tags.get(item_code, []))
+		if short <= 0:
+			continue
+		free = rfid.untagged_qty(item_code, warehouse)
+		if short > free:
+			rfid.log_exception_on_failure("Manual Override",
+				_("{0} x {1} billed by hand on {2} but only {3} piece(s) in {4} have no tag.").format(
+					short, item_code, doc.get("pos_profile") or _("desk"), free, warehouse),
+				severity="Medium", pos_profile=doc.get("pos_profile"), reference_doctype=doc.doctype,
+				reference_name=doc.name)
+			frappe.throw(_("{0}: {1} piece(s) billed without reading a tag, but only {2} piece(s) in {3} have no "
+				"tag. Put the tagged pieces on the RFID tray.").format(item_code, short, free, warehouse),
+				title=_("Read the RFID tag"))
 
 
 def _item_rows_tags(doc, row, basket_tags):

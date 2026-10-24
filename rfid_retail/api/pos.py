@@ -53,8 +53,8 @@ def counter_config(pos_profile):
 @frappe.whitelist()
 def manual_add_check(item_code, pos_profile):
 	"""Picked by hand at a counter: how many units of the item in the counter's warehouse carry a tag
-	and how many do not. The cashier is warned only when both kinds are in stock (a tagged piece
-	should be read on the tray, not picked by hand). Never throws."""
+	and how many do not. Both kinds in stock: the cashier is warned (a tagged piece should be read on
+	the tray). Only tagged pieces and scan required: picking by hand is blocked. Never throws."""
 	from rfid_retail.settings import is_enabled
 
 	out = {"warn": False, "tagged": 0, "untagged": 0}
@@ -72,7 +72,9 @@ def manual_add_check(item_code, pos_profile):
 		actual = cint(flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty")))
 		tagged = min(rfid.count_item_tags(item_code, warehouse), max(actual, 0))
 		untagged = max(actual - tagged, 0)
-	out.update(tagged=tagged, untagged=untagged, warn=bool(tagged and untagged), warehouse=warehouse)
+	# Every piece in stock carries a tag: one picked by hand is a tagged piece read nowhere.
+	block = bool(tagged and not untagged and cint(setting("require_scan_for_sale")))
+	out.update(tagged=tagged, untagged=untagged, warn=bool(tagged and untagged), block=block, warehouse=warehouse)
 	return out
 
 
