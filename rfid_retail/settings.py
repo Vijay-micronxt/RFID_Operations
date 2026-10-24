@@ -36,6 +36,12 @@ def get(fieldname):
 	return get_settings().get(fieldname)
 
 
+def hand_pick_check():
+	"""Hand-picked RFID items checked against untagged stock (on unless switched off)."""
+	value = get("check_hand_picked_items")
+	return is_enabled() and (value is None or cint(value))
+
+
 def station_roles(station):
 	rows = [r.role for r in get_settings().station_roles if r.station == station]
 	return set(rows) | {"System Manager"}

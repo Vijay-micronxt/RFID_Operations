@@ -204,34 +204,28 @@
 			<label class="field">Warehouse
 				<select id="a-wh">{% for w in warehouses %}<option>{{ w }}</option>{% endfor %}</select>
 			</label>
-			<label class="field">Handheld
+			<label class="field" id="a-device-field" hidden>Handheld
 				<select id="a-device" class="device-select" data-type="Handheld"></select>
 			</label>
 			<button class="btn primary wide" id="a-begin"><span class="ms">play_arrow</span>Start today's count</button>
 		</div>
 		<div id="a-run" hidden>
-			<p class="step"><b>1</b> Choose the area you are in</p>
-			<div class="chips" id="a-areas">
-				{% for area in ["Sales Floor", "Stockroom", "Trial Rooms", "Returns/Hold", "Alteration"] %}
-				<button class="chip {{ 'on' if loop.first else '' }}" data-area="{{ area }}">{{ area }}</button>
-				{% endfor %}
-			</div>
-			<p class="step"><b>2</b> Scan every tag you see (Enter after each)</p>
+			<p class="step"><b>1</b> Scan every tag in this warehouse (Enter after each)</p>
 			<div class="scan">
 				<span class="ms">barcode_reader</span>
 				<input id="a-scan" autocomplete="off" placeholder="Scan or type tag">
 			</div>
 			<p class="muted small">Each scan is saved straight away and ticks the piece on the right.</p>
-			<p class="step"><b>3</b> All areas done? Finish the count</p>
+			<p class="step"><b>2</b> Everything scanned? Finish the count</p>
 			<button class="btn primary wide" id="a-compare"><span class="ms">fact_check</span>Finish count &amp; show result</button>
-			<p class="step"><b>4</b> Send the result to the manager</p>
+			<p class="step"><b>3</b> Send the result to the manager</p>
 			<button class="btn ghost wide" id="a-submit"><span class="ms">send</span>Send for review</button>
 			<button class="btn text wide" id="a-discard"><span class="ms">delete</span>Discard this count</button>
 		</div>
 	</aside>
 	<section class="panel work" id="a-summary">
 		<div class="placeholder"><span class="ms">inventory</span><h3>Daily stock check</h3>
-			<p>Walk the store with the handheld and scan every tag. The system ticks off each garment that should be here
+			<p>Walk the warehouse with the reader and scan every tag. The system ticks off each garment that should be here
 			and shows what is missing or unexpected. Nothing in stock changes.</p>
 			<p class="muted small" style="margin-top:8px">Pick the warehouse on the left and press Start.</p></div>
 	</section>
@@ -249,6 +243,6 @@
 		canRemoveUnsold: {{ can_remove_unsold | tojson }}
 	};
 </script>
-<script src="/assets/rfid_retail/js/rfid_station.js?v=15"></script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=16"></script>
 </body>
 </html>

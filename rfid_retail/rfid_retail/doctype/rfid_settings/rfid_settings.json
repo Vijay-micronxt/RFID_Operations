@@ -12,6 +12,7 @@
   "require_scan_for_sale",
   "allow_label_fallback",
   "block_untracked_items",
+  "check_hand_picked_items",
   "cb_sale",
   "tag_release_mode",
   "allow_unsold_tag_removal",
@@ -107,6 +108,13 @@
    "fieldname": "block_untracked_items",
    "fieldtype": "Check",
    "label": "Block stock items that are not RFID tracked"
+  },
+  {
+   "default": "1",
+   "description": "RFID counters: picking an RFID item by hand (click or item barcode) asks the cashier to confirm the piece has no tag, and never allows more pieces by hand than the untagged stock (checked again at payment and on submit). Off: no such check.",
+   "fieldname": "check_hand_picked_items",
+   "fieldtype": "Check",
+   "label": "Check RFID items picked by hand against untagged stock"
   },
   {
    "fieldname": "cb_sale",
@@ -454,7 +462,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-19 20:00:00.000000",
+ "modified": "2026-10-24 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Settings",

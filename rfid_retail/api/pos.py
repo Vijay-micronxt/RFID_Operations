@@ -33,7 +33,7 @@ def _basket(name, for_update=False):
 @frappe.whitelist()
 def counter_config(pos_profile):
 	"""What a POS frontend needs to switch into RFID mode for this counter. Never throws."""
-	from rfid_retail.settings import is_enabled
+	from rfid_retail.settings import hand_pick_check, is_enabled
 
 	off = {"enabled": False}
 	if not is_enabled() or not cint(frappe.db.get_value("POS Profile", pos_profile, "custom_rfid_counter")):
@@ -45,9 +45,38 @@ def counter_config(pos_profile):
 		"require_scan": cint(setting("require_scan_for_sale")),
 		"allow_label_fallback": cint(setting("allow_label_fallback")),
 		"block_untracked_items": cint(setting("block_untracked_items")),
+		"hand_pick_check": 1 if hand_pick_check() else 0,
 		"device": frappe.db.get_value("RFID Device",
 			{"pos_profile": pos_profile, "device_type": "Tray Reader", "is_active": 1}, "name"),
 	}
+
+
+@frappe.whitelist()
+def manual_add_check(item_code, pos_profile):
+	"""Picked by hand at a counter: how many units of the item in the counter's warehouse carry a tag
+	and how many do not. Both kinds in stock: the cashier is warned (a tagged piece should be read on
+	the tray). Only tagged pieces and scan required: picking by hand is blocked. Never throws."""
+	from rfid_retail.settings import hand_pick_check
+
+	out = {"warn": False, "tagged": 0, "untagged": 0}
+	if not hand_pick_check() or not item_code or not rfid.is_rfid_item(item_code):
+		return out
+	warehouse = frappe.db.get_value("POS Profile", pos_profile, "warehouse")
+	if not warehouse:
+		return out
+	if rfid.has_serial(item_code):
+		serials = frappe.get_all("Serial No", {"item_code": item_code, "warehouse": warehouse, "status": "Active"},
+			pluck="name")
+		tagged = sum(1 for s in serials if rfid.active_assignment_for(serial_no=s))
+		untagged = len(serials) - tagged
+	else:
+		actual = cint(flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty")))
+		tagged = min(rfid.count_item_tags(item_code, warehouse), max(actual, 0))
+		untagged = max(actual - tagged, 0)
+	# Every piece in stock carries a tag: one picked by hand is a tagged piece read nowhere.
+	block = bool(tagged and not untagged)
+	out.update(tagged=tagged, untagged=untagged, warn=bool(tagged and untagged), block=block, warehouse=warehouse)
+	return out
 
 
 @frappe.whitelist()

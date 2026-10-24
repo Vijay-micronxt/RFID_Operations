@@ -91,13 +91,60 @@ RFID_TAG_DOCTYPES.forEach((doctype) => {
 			if (doctype === "Purchase Invoice" && !frm.doc.update_stock) return;
 			frm.add_custom_button(__("RFID Tags"), () => rfid_retail.tag_dialog(frm));
 		},
+		// Cancelling frees every tag this document put on garments: say so and ask again.
+		before_cancel(frm) {
+			if (!(frappe.boot.rfid_retail || {}).enabled) return;
+			return rfid_retail.confirm_cancel_tags(frm);
+		},
 	});
 });
+
+rfid_retail.confirm_cancel_tags = async function (frm) {
+	const impact = await frappe.xcall("rfid_retail.overrides.stock.cancel_impact", { doctype: frm.doctype, name: frm.doc.name });
+	if (!impact.tags) return;
+	const esc = frappe.utils.escape_html;
+	const list = impact.items.map((r) => `<li>${esc(r.item_name || r.item_code)} (${esc(r.item_code)}): <b>${r.tags}</b></li>`).join("");
+	await new Promise((resolve) => {
+		let answered = false;
+		const d = new frappe.ui.Dialog({
+			title: __("Cancel will free RFID tags"),
+			fields: [
+				{
+					fieldtype: "HTML",
+					options: `<div class="alert alert-warning" style="margin-bottom:8px">${__(
+						"Cancelling {0} frees all <b>{1}</b> RFID tag(s) put on its garments. Those garments stop counting as tagged stock and the tags can go on other garments.",
+						[esc(frm.doc.name), impact.tags]
+					)}</div><ul style="margin:0 0 8px 16px">${list}</ul><p class="text-muted small">${__(
+						"Only cancel if this document is wrong. To fix just a wrong tag, use Remove tags at the RFID station and tag the piece again with the RFID Tags button."
+					)}</p>`,
+				},
+			],
+			primary_action_label: __("Cancel and free tags"),
+			primary_action: () => {
+				answered = true;
+				d.hide();
+				resolve();
+			},
+			secondary_action_label: __("Keep document"),
+			secondary_action: () => d.hide(),
+		});
+		d.get_primary_btn().removeClass("btn-primary").addClass("btn-danger");
+		d.onhide = () => {
+			if (!answered) {
+				frappe.validated = false;
+				resolve();
+			}
+		};
+		d.show();
+	});
+};
 
 rfid_retail.tag_dialog = async function (frm) {
 	let rows = await frappe.xcall("rfid_retail.overrides.stock.row_tag_rows", { doctype: frm.doctype, name: frm.doc.name });
 	if (!rows.length) {
-		frappe.msgprint(__("No RFID item on this document. Tick RFID Tracked Garment on the item first."));
+		frappe.msgprint(
+			__("No row to tag here. Tick RFID Tracked Garment on the item first. Sets (suits and other multi-piece items) are tagged piece by piece at the Tag garments station.")
+		);
 		return;
 	}
 	const esc = frappe.utils.escape_html;
@@ -110,6 +157,13 @@ rfid_retail.tag_dialog = async function (frm) {
 		title: __("RFID Tags"),
 		size: "large",
 		fields: [
+			{
+				fieldname: "review",
+				fieldtype: "Button",
+				label: __("Check stickers / move tags"),
+				click: () => rfid_retail.review_tags_dialog(frm, () => refreshRows()),
+				hidden: !rows.some((r) => r.direction === "in"),
+			},
 			{ fieldname: "row", fieldtype: "Select", label: __("Item row"), options: rows.map(label), default: label(S.row), onchange: () => pick() },
 			{ fieldname: "summary", fieldtype: "HTML" },
 			{
@@ -174,7 +228,9 @@ rfid_retail.tag_dialog = async function (frm) {
 		d.fields_dict.summary.$wrapper.html(`
 			<div style="display:flex;align-items:baseline;gap:12px;margin:4px 0">
 				<span style="font-size:32px;font-weight:700;color:var(--${color}-600)">${n} / ${need}</span>
-				<span class="text-muted">${esc(verb[S.row.direction])} · ${esc(place || "")}</span>
+				<span class="text-muted">${esc(verb[S.row.direction])} · ${esc(place || "")}${
+					S.row.done ? ` · ${esc(__("{0} tag(s) already on this row", [S.row.done]))}` : ""
+				}</span>
 			</div>
 			<div class="alert" style="margin:6px 0 4px;padding:8px 12px;border-radius:8px;background:var(--${color}-50);color:var(--${color}-700)">${esc(msg)}</div>`);
 		d.fields_dict.list.$wrapper.html(
@@ -188,6 +244,7 @@ rfid_retail.tag_dialog = async function (frm) {
 							return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border-color)">
 								<span class="indicator-pill ${v ? (ok ? "green" : "red") : "gray"}">${esc(c)}</span>
 								<span class="small ${ok ? "text-muted" : "text-danger"}" style="flex:1">${esc(v ? v.message : __("Checking..."))}</span>
+								${v && v.move_from ? `<a class="small" style="font-weight:600" data-move="${esc(c)}">${__("Move here")}</a>` : ""}
 								<a class="small" data-drop="${esc(c)}">${__("Remove")}</a></div>`;
 						})
 						.join("")}</div>`
@@ -281,9 +338,161 @@ rfid_retail.tag_dialog = async function (frm) {
 			}
 		}, 0)
 	);
+	async function refreshRows() {
+		rows = await frappe.xcall("rfid_retail.overrides.stock.row_tag_rows", { doctype: frm.doctype, name: frm.doc.name });
+		S.row = rows.find((x) => x.row === S.row.row) || S.row;
+		d.set_df_property("row", "options", rows.map(label));
+		d.set_value("row", label(S.row));
+		frm.reload_doc();
+		render();
+	}
+
+	d.fields_dict.list.$wrapper.on("click", "[data-move]", async (e) => {
+		const code = $(e.currentTarget).attr("data-move");
+		await frappe.xcall("rfid_retail.overrides.stock.move_row_tags", {
+			doctype: frm.doctype,
+			name: frm.doc.name,
+			moves: [{ code, row: S.row.row }],
+		});
+		frappe.show_alert({ message: __("Tag {0} moved to row {1}", [code, S.row.idx]), indicator: "green" }, 5);
+		S.codes = S.codes.filter((c) => c !== code);
+		delete S.verdicts[code];
+		await refreshRows();
+	});
 	d.fields_dict.list.$wrapper.on("click", "[data-drop]", (e) => {
 		const code = $(e.currentTarget).attr("data-drop");
 		S.codes = S.codes.filter((c) => c !== code);
+		render();
+	});
+	d.show();
+	render();
+	setTimeout(() => input.focus(), 300);
+};
+
+// Sticker check: read the tags of the garments in hand and see which item / row each one was read for.
+// A tag read for the wrong row (sticker of B stuck on A) is moved to the right row; all moves are saved
+// together so two rows can swap tags.
+rfid_retail.review_tags_dialog = async function (frm, after) {
+	const esc = frappe.utils.escape_html;
+	let rows = (await frappe.xcall("rfid_retail.overrides.stock.row_tag_rows", { doctype: frm.doctype, name: frm.doc.name })).filter(
+		(r) => r.direction === "in"
+	);
+	const R = { codes: [], info: {}, target: {} };
+	const rowLabel = (r) => `${__("Row")} ${r.idx}: ${r.item_name} (${r.item_code})`;
+
+	const d = new frappe.ui.Dialog({
+		title: __("Check stickers / move tags"),
+		size: "extra-large",
+		fields: [
+			{
+				fieldtype: "HTML",
+				options: `<p class="text-muted small" style="margin:0 0 8px">${__(
+					"Read the tag of each garment in hand. Each line shows the item and row the tag was read for. If the garment is a different item, pick its row and press Save moves."
+				)}</p>`,
+			},
+			{ fieldname: "read", fieldtype: "Data", label: __("Tags on the reader") },
+			{ fieldname: "list", fieldtype: "HTML" },
+		],
+		primary_action_label: __("Save moves"),
+		primary_action: () => save(),
+		secondary_action_label: __("Clear reads"),
+		secondary_action: () => {
+			R.codes = [];
+			R.info = {};
+			R.target = {};
+			render();
+		},
+	});
+
+	const pending = () => R.codes.filter((c) => R.info[c] && R.info[c].movable && R.target[c] && R.target[c] !== R.info[c].row);
+
+	function render() {
+		const html = R.codes
+			.slice()
+			.reverse()
+			.map((c) => {
+				const v = R.info[c];
+				if (!v) return `<tr><td><span class="indicator-pill gray">${esc(c)}</span></td><td colspan="2" class="text-muted">${__("Checking...")}</td></tr>`;
+				const moved = v.movable && R.target[c] && R.target[c] !== v.row;
+				const select = v.movable
+					? `<div class="control-input flex align-center" style="position:relative"><select class="form-control ellipsis" style="padding-right:28px;cursor:pointer" title="${esc(
+							__("Pick the row of the item this garment really is")
+						)}" data-target="${esc(c)}">${rows
+							.map(
+								(r) =>
+									`<option value="${esc(r.row)}" ${r.row === (R.target[c] || v.row) ? "selected" : ""}>${esc(rowLabel(r))}${r.row === v.row ? " ✓" : ""}</option>`
+							)
+							.join("")}</select><span style="position:absolute;right:10px;pointer-events:none">${frappe.utils.icon(
+							"select",
+							"xs"
+						)}</span></div>`
+					: `<span class="text-muted small">${__("cannot be moved")}</span>`;
+				return `<tr ${moved ? 'style="background:var(--orange-50)"' : ""}>
+					<td><span class="indicator-pill ${v.row ? "green" : "red"}">${esc(c)}</span></td>
+					<td>${
+						v.item_name
+							? `<b>${esc(v.item_name)}</b><br><span class="small text-muted">${esc(v.item_code)} · ${esc(v.message)}</span>`
+							: `<span class="text-danger small">${esc(v.message)}</span>`
+					}</td>
+					<td style="min-width:260px">${select}</td></tr>`;
+			})
+			.join("");
+		d.fields_dict.list.$wrapper.html(
+			R.codes.length
+				? `<table class="table table-bordered" style="margin:0"><thead><tr><th>${__("Tag")}</th><th>${__("Read for")}</th><th>${__(
+						"Garment really is (click to change)"
+					)}</th></tr></thead><tbody>${html}</tbody></table>
+					<p class="small text-muted" style="margin-top:6px">${__("{0} tag(s) to move", [pending().length])}</p>`
+				: `<p class="text-muted">${__("No tags read yet.")}</p>`
+		);
+		d.get_primary_btn().prop("disabled", !pending().length);
+	}
+
+	async function check(fresh) {
+		const r = await frappe.xcall("rfid_retail.overrides.stock.review_tags", { doctype: frm.doctype, name: frm.doc.name, codes: fresh });
+		r.forEach((v) => (R.info[v.code] = v));
+		render();
+	}
+
+	function add(text) {
+		const fresh = [...new Set(text.split(/[\s,]+/).map((x) => x.trim().toUpperCase()))].filter((x) => x && !R.codes.includes(x));
+		if (!fresh.length) return;
+		R.codes.push(...fresh);
+		render();
+		check(fresh);
+	}
+
+	async function save() {
+		const moves = pending().map((c) => ({ code: c, row: R.target[c] }));
+		if (!moves.length) return;
+		const r = await frappe.xcall("rfid_retail.overrides.stock.move_row_tags", { doctype: frm.doctype, name: frm.doc.name, moves });
+		frappe.show_alert({ message: __("{0} tag(s) moved", [r.moved]), indicator: "green" }, 5);
+		rows = r.rows.filter((x) => x.direction === "in");
+		R.target = {};
+		await check([...R.codes]);
+		frm.reload_doc();
+		after && after();
+	}
+
+	const input = d.fields_dict.read.$input;
+	input.on("keydown", (e) => {
+		if (e.key !== "Enter") return;
+		e.preventDefault();
+		const text = input.val();
+		input.val("");
+		add(text);
+	});
+	input.on("paste", () =>
+		setTimeout(() => {
+			const text = input.val();
+			if (text.split(/[\s,]+/).filter(Boolean).length > 1) {
+				input.val("");
+				add(text);
+			}
+		}, 0)
+	);
+	d.fields_dict.list.$wrapper.on("change", "[data-target]", (e) => {
+		R.target[$(e.currentTarget).attr("data-target")] = e.currentTarget.value;
 		render();
 	});
 	d.show();

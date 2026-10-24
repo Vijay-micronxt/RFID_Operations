@@ -1,5 +1,6 @@
 """Adds an "RFID" group to the Connections panel of standard ERPNext doctypes."""
 
+import frappe
 from frappe import _
 
 
@@ -49,3 +50,31 @@ def pos_profile(data):
 
 def warehouse(data):
 	return _add(data, "warehouse", {"RFID Device": None, "RFID Audit Session": None})
+
+
+def _stock_document(data, doctype):
+	"""Tags read on a purchase / stock document: assignments it made, every tag event on it,
+	exceptions raised for it and sticker jobs printed from it."""
+	_add(data, data.fieldname or frappe.scrub(doctype), {
+		"RFID Tag Assignment": "source_name",
+		"RFID Tag Event": "reference_name",
+		"RFID Exception": "reference_name",
+		"Sticker Print Job": "source_name",
+	})
+	data.setdefault("dynamic_links", {}).update({
+		"source_name": [doctype, "source_doctype"],
+		"reference_name": [doctype, "reference_doctype"],
+	})
+	return data
+
+
+def purchase_receipt(data):
+	return _stock_document(data, "Purchase Receipt")
+
+
+def purchase_invoice(data):
+	return _stock_document(data, "Purchase Invoice")
+
+
+def stock_entry(data):
+	return _stock_document(data, "Stock Entry")

@@ -80,13 +80,17 @@ def replace_tag(old_epc, new_epc, reason="Tag Damaged", device=None):
 		frappe.throw(_("Tag {0} is not on any garment.").format(old.name))
 	serial_no, component, prior = old.serial_no, old.component, old.status
 	item_code, warehouse = old.item_code, old.warehouse
+	# the new tag belongs to the same inward row as the old one
+	source = frappe.db.get_value("RFID Tag Assignment", old.current_assignment,
+		["source_doctype", "source_name", "source_row"])
 	rfid.close_assignment(old.name, "Tag Replaced", new_tag_status=rfid.TAG_DAMAGED, remarks=reason,
 		action="Replaced")
 	if component:
 		frappe.db.set_value("Garment Component", component, "status", "Pending Tag")
 	new = rfid.normalize(new_epc)
-	rfid.assign_tag(new, serial_no, component, device=device, item_code=item_code, warehouse=warehouse,
-		remarks=_("Replaces {0}").format(old.name))
+	asg = rfid.assign_tag(new, serial_no, component, device=device, item_code=item_code, warehouse=warehouse,
+		remarks=_("Replaces {0}").format(old.name), source=source if source and source[0] else None)
+	rfid.add_to_source_row(asg, new, _("RFID tag {0} replaced by {1}.").format(old.name, new))
 	if prior == rfid.TAG_SOLD:
 		frappe.db.set_value("RFID Tag", new, "status", rfid.TAG_SOLD)
 	rfid.log_exception("Tag Replaced", _("{0} replaced by {1} on {2}: {3}").format(
