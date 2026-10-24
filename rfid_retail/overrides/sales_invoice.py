@@ -82,9 +82,12 @@ def before_submit(doc, method=None):
 
 
 def _check_untagged_stock(doc, basket_tags):
-	"""Scan required: units billed without a tag read must be units that have no tag. Selling more
-	than the untagged stock means a tagged piece went out without its tag being read."""
-	if not cint(setting("require_scan_for_sale")):
+	"""Units billed without a tag read must be units that have no tag. Selling more than the
+	untagged stock means a tagged piece went out without its tag being read. RFID Settings >
+	Check RFID items picked by hand."""
+	from rfid_retail.settings import hand_pick_check
+
+	if not hand_pick_check():
 		return
 	billed = {}
 	for row in rfid_rows(doc):
