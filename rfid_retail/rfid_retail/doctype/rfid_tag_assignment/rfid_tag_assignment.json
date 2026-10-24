@@ -191,7 +191,7 @@
    "fieldname": "close_reason",
    "fieldtype": "Select",
    "label": "Close Reason",
-   "options": "\nSold\nDetached After Sale\nTag Replaced\nTag Damaged\nTag Lost\nReturn Re-tag\nReturned To Supplier\nIssued Out\nInward Cancelled\nManual",
+   "options": "\nSold\nDetached After Sale\nTag Replaced\nTag Damaged\nTag Lost\nReturn Re-tag\nReturned To Supplier\nIssued Out\nInward Cancelled\nManual\nWrong Item",
    "read_only": 1
   },
   {
@@ -203,7 +203,7 @@
  ],
  "in_create": 1,
  "links": [],
- "modified": "2026-10-22 12:00:00.000000",
+ "modified": "2026-10-24 13:30:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Tag Assignment",

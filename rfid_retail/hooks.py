@@ -339,4 +339,7 @@ override_doctype_dashboards = {
 	"Sales Invoice": "rfid_retail.dashboards.sales_invoice",
 	"POS Profile": "rfid_retail.dashboards.pos_profile",
 	"Warehouse": "rfid_retail.dashboards.warehouse",
+	"Purchase Receipt": "rfid_retail.dashboards.purchase_receipt",
+	"Purchase Invoice": "rfid_retail.dashboards.purchase_invoice",
+	"Stock Entry": "rfid_retail.dashboards.stock_entry",
 }

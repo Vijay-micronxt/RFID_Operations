@@ -340,8 +340,13 @@ def _code_status(row, way, code):
 			return {"ok": True, "message": _("New tag")}
 		if tag.current_assignment:
 			name = frappe.get_cached_value("Item", tag.item_code, "item_name") if tag.item_code else ""
-			return {"ok": False, "message": _("Already on {0} ({1}). Take it off the reader.").format(
+			out = {"ok": False, "message": _("Already on {0} ({1}). Take it off the reader.").format(
 				name or tag.item_code, tag.serial_no or tag.warehouse or "")}
+			on = _tag_on_document(tag, row.parenttype, row.parent)
+			if on and on.row != row.name and on.movable:
+				out.update(message=_("Read for row {0}: {1}. If this piece is {2}, move the tag here.").format(
+					on.idx, name or tag.item_code, row.item_name or row.item_code), move_from=on.row)
+			return out
 		problem = rfid.tag_problem(tag)
 		return {"ok": not problem, "message": problem or _("Free tag")}
 	try:
@@ -393,6 +398,98 @@ def assign_row_tags(doctype, name, row, codes):
 		"custom_rfid_tag_count": len(saved)}, update_modified=False)
 	return {"tagged": len(codes), "state": _row_state(frappe.get_doc(doctype, name), next(
 		r for r in frappe.get_doc(doctype, name).items if r.name == row))}
+
+
+def _tag_on_document(tag, doctype, name):
+	"""Row of this document the tag was read for, when its current use started there."""
+	if not tag.current_assignment:
+		return None
+	src = frappe.db.get_value("RFID Tag Assignment", tag.current_assignment,
+		["source_doctype", "source_name", "source_row"], as_dict=True)
+	if not src or (src.source_doctype, src.source_name) != (doctype, name) or not src.source_row:
+		return None
+	child = frappe.get_meta(doctype).get_field("items").options
+	idx = frappe.db.get_value(child, src.source_row, "idx")
+	return frappe._dict(row=src.source_row, idx=idx, movable=tag.status == rfid.TAG_ASSIGNED and not tag.basket)
+
+
+@frappe.whitelist()
+def review_tags(doctype, name, codes):
+	"""Sticker check: for each tag read, the item and row of this document it belongs to."""
+	from rfid_retail.api.pos import _load
+	from rfid_retail.settings import require_enabled
+
+	require_enabled()
+	doc = frappe.get_doc(doctype, name)
+	doc.check_permission("read")
+	rows = {r.name: r for r in doc.items}
+	out = []
+	for code in dict.fromkeys(rfid.normalize(c) for c in _load(codes) if c):
+		tag = frappe.db.get_value("RFID Tag", code, ["name", "status", "item_code", "serial_no", "warehouse",
+			"current_assignment", "basket"], as_dict=True)
+		entry = {"code": code, "status": tag.status if tag else None, "item_code": tag and tag.item_code,
+			"item_name": tag and tag.item_code and frappe.get_cached_value("Item", tag.item_code, "item_name"),
+			"row": None, "idx": None, "movable": False}
+		on = tag and _tag_on_document(tag, doctype, name)
+		if on:
+			entry.update(row=on.row, idx=on.idx, movable=bool(on.movable and rows.get(on.row)))
+			entry["message"] = _("Row {0}").format(on.idx) if on.movable else _("Row {0} - {1}, cannot be moved").format(
+				on.idx, tag.status)
+		elif not tag:
+			entry["message"] = _("Unknown tag - not read on anything yet")
+		elif tag.current_assignment:
+			entry["message"] = _("On {0} from another document ({1})").format(tag.item_code, tag.status)
+		else:
+			entry["message"] = _("Not on any garment ({0})").format(tag.status)
+		out.append(entry)
+	return out
+
+
+@frappe.whitelist(methods=["POST"])
+def move_row_tags(doctype, name, moves):
+	"""Tags read for the wrong row (sticker of item B put on item A): move each to the row of the
+	garment it is really on. All moves are saved together, or none (so two rows can swap tags)."""
+	from rfid_retail.api.pos import _load
+
+	moves = [m for m in (_load(moves) if isinstance(moves, str) else moves or []) if m.get("code") and m.get("row")]
+	if not moves:
+		frappe.throw(_("Nothing to move."))
+	doc = None
+	plan = []
+	for m in moves:
+		code = rfid.normalize(m["code"])
+		doc, target = _row_doc(doctype, name, m["row"])
+		if direction(doc, target) != IN:
+			frappe.throw(_("Row {0}: tags can be moved only between rows of stock that came in.").format(target.idx))
+		tag = frappe.db.get_value("RFID Tag", code, ["name", "status", "item_code", "current_assignment", "basket"],
+			as_dict=True)
+		on = tag and _tag_on_document(tag, doctype, name)
+		if not on:
+			frappe.throw(_("Tag {0} was not read on {1}.").format(code, name))
+		if not on.movable:
+			frappe.throw(_("Tag {0} is {1}; it cannot be moved.").format(code, tag.status))
+		if on.row == target.name:
+			continue
+		plan.append((code, on, target))
+	user = frappe.utils.get_fullname()
+	# Take every moved tag off first, so rows that swap tags both have room.
+	for code, on, target in plan:
+		rfid.close_assignment(code, "Wrong Item", action="Correction", reference_doctype=doctype, reference_name=name,
+			remarks=_("Moved from row {0} to row {1} ({2})").format(on.idx, target.idx, target.item_code))
+	for code, on, target in plan:
+		state = _row_state(frappe.get_doc(doctype, name), target)
+		if state["to_tag"] < 1:
+			frappe.throw(_("Row {0}: every piece of {1} already has a tag. Move or remove one of its tags too.").format(
+				target.idx, target.item_code), title=_("No room on the row"))
+		if state.get("serials") is not None:
+			asg = rfid.assign_tag(code, state["serials"][0], source=(doctype, name, target.name),
+				remarks=_("Moved from row {0}").format(on.idx))
+		else:
+			asg = rfid.assign_tag(code, item_code=target.item_code, warehouse=target_warehouse(target),
+				source=(doctype, name, target.name), remarks=_("Moved from row {0}").format(on.idx))
+		rfid.add_to_source_row(asg, code, _("RFID tag {0} moved from row {1} to row {2} ({3}) by {4}.").format(
+			code, on.idx, target.idx, target.item_code, user))
+	return {"moved": len(plan), "rows": row_tag_rows(doctype, name)}
 
 
 @frappe.whitelist()

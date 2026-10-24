@@ -36,7 +36,7 @@ UNUSABLE = (TAG_DAMAGED, TAG_LOST, TAG_RETIRED)
 # Tags that stand for a unit still in stock
 IN_STOCK_TAG = (TAG_ASSIGNED, TAG_HOLD)
 # Assignment close reasons after which the garment is still in stock and needs a new tag
-RETAG_REASONS = ("Manual", "Tag Damaged", "Tag Lost", "Tag Replaced")
+RETAG_REASONS = ("Manual", "Tag Damaged", "Tag Lost", "Tag Replaced", "Wrong Item")
 # Documents whose rows keep the tags read for them (custom_rfid_tags)
 ROW_TAG_DOCTYPES = ("Purchase Receipt", "Purchase Invoice", "Stock Entry")
 
@@ -301,7 +301,8 @@ def close_assignment(epc, reason, new_tag_status=TAG_AVAILABLE, remarks=None, ac
 	previous = tag.status
 	snapshot = frappe._dict(tag.as_dict())
 	if tag.current_assignment and reason in RETAG_REASONS:
-		drop_from_source_row(tag.current_assignment, tag.name, remarks or reason)
+		# a tag moved to another row is noted once, by the move itself
+		drop_from_source_row(tag.current_assignment, tag.name, remarks or reason, note=reason != "Wrong Item")
 	if tag.current_assignment:
 		frappe.db.set_value(
 			"RFID Tag Assignment",
@@ -342,7 +343,7 @@ def _row_codes(row):
 	return [c for c in (normalize(x) for x in (row.custom_rfid_tags or "").replace(",", "\n").split()) if c]
 
 
-def drop_from_source_row(assignment, code, reason=None):
+def drop_from_source_row(assignment, code, reason=None, note=True):
 	"""The tag came off a garment that is still in stock: take it off the inward row that read it,
 	so the row shows the piece as waiting for a tag again, and note it on the document's timeline."""
 	src, row = _source_row(assignment)
@@ -351,6 +352,8 @@ def drop_from_source_row(assignment, code, reason=None):
 	codes = [c for c in _row_codes(row) if c != code]
 	frappe.db.set_value(frappe.get_meta(src.source_doctype).get_field("items").options, row.name,
 		{"custom_rfid_tags": "\n".join(codes) or None, "custom_rfid_tag_count": len(codes)}, update_modified=False)
+	if not note:
+		return
 	_timeline(src.source_doctype, src.source_name,
 		_("RFID tag {0} taken off {1} (row {2}): {3}. The piece can be tagged again with the RFID Tags button.").format(
 			code, row.item_code, row.idx, reason or _("no reason given")))
