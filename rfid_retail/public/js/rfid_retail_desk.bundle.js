@@ -415,12 +415,17 @@ rfid_retail.review_tags_dialog = async function (frm, after) {
 				if (!v) return `<tr><td><span class="indicator-pill gray">${esc(c)}</span></td><td colspan="2" class="text-muted">${__("Checking...")}</td></tr>`;
 				const moved = v.movable && R.target[c] && R.target[c] !== v.row;
 				const select = v.movable
-					? `<select class="form-control input-xs" data-target="${esc(c)}">${rows
+					? `<div class="control-input flex align-center" style="position:relative"><select class="form-control ellipsis" style="padding-right:28px;cursor:pointer" title="${esc(
+							__("Pick the row of the item this garment really is")
+						)}" data-target="${esc(c)}">${rows
 							.map(
 								(r) =>
 									`<option value="${esc(r.row)}" ${r.row === (R.target[c] || v.row) ? "selected" : ""}>${esc(rowLabel(r))}${r.row === v.row ? " ✓" : ""}</option>`
 							)
-							.join("")}</select>`
+							.join("")}</select><span style="position:absolute;right:10px;pointer-events:none">${frappe.utils.icon(
+							"select",
+							"xs"
+						)}</span></div>`
 					: `<span class="text-muted small">${__("cannot be moved")}</span>`;
 				return `<tr ${moved ? 'style="background:var(--orange-50)"' : ""}>
 					<td><span class="indicator-pill ${v.row ? "green" : "red"}">${esc(c)}</span></td>
@@ -435,7 +440,7 @@ rfid_retail.review_tags_dialog = async function (frm, after) {
 		d.fields_dict.list.$wrapper.html(
 			R.codes.length
 				? `<table class="table table-bordered" style="margin:0"><thead><tr><th>${__("Tag")}</th><th>${__("Read for")}</th><th>${__(
-						"Garment really is"
+						"Garment really is (click to change)"
 					)}</th></tr></thead><tbody>${html}</tbody></table>
 					<p class="small text-muted" style="margin-top:6px">${__("{0} tag(s) to move", [pending().length])}</p>`
 				: `<p class="text-muted">${__("No tags read yet.")}</p>`
