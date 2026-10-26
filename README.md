@@ -18,6 +18,8 @@ versus what ERPNext thinks is there.
 Works with standard ERPNext Sales / POS Invoices. When [POS Next](#pos-next-integration) is
 installed it adds an RFID tray to the POS Next sale screen.
 
+**Store user manual:** [docs/USER_MANUAL.md](docs/USER_MANUAL.md) (setup, tagging, stations, selling, returns, daily count, settings).
+
 ### Features
 
 **Master switch and station access** (`RFID Settings`)
