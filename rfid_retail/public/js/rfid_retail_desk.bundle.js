@@ -91,7 +91,8 @@ RFID_TAG_DOCTYPES.forEach((doctype) => {
 			if (doctype === "Purchase Invoice" && !frm.doc.update_stock) return;
 			frm.add_custom_button(__("RFID Tags"), () => rfid_retail.tag_dialog(frm));
 		},
-		// Cancelling frees every tag this document put on garments: say so and ask again.
+		// Cancelling takes purchased stock back out and frees every tag this document put on
+		// garments: say so and ask again.
 		before_cancel(frm) {
 			if (!(frappe.boot.rfid_retail || {}).enabled) return;
 			return rfid_retail.confirm_cancel_tags(frm);
@@ -100,26 +101,53 @@ RFID_TAG_DOCTYPES.forEach((doctype) => {
 });
 
 rfid_retail.confirm_cancel_tags = async function (frm) {
+	// Purchase Receipt and a stock-updating Purchase Invoice: always warn, the stock goes back out.
+	const takes_stock =
+		frm.doctype === "Purchase Receipt" || (frm.doctype === "Purchase Invoice" && frm.doc.update_stock);
 	const impact = await frappe.xcall("rfid_retail.overrides.stock.cancel_impact", { doctype: frm.doctype, name: frm.doc.name });
-	if (!impact.tags) return;
+	if (!impact.tags && !takes_stock) return;
 	const esc = frappe.utils.escape_html;
-	const list = impact.items.map((r) => `<li>${esc(r.item_name || r.item_code)} (${esc(r.item_code)}): <b>${r.tags}</b></li>`).join("");
+	let message = "";
+	if (takes_stock) {
+		const per_warehouse = {};
+		(frm.doc.items || []).forEach((row) => {
+			if (!row.warehouse) return;
+			per_warehouse[row.warehouse] = (per_warehouse[row.warehouse] || 0) + flt(row.stock_qty || row.qty);
+		});
+		const stock_list = Object.entries(per_warehouse)
+			.map(([warehouse, qty]) => `<li>${esc(warehouse)}: <b>${format_number(qty, null, 0)}</b></li>`)
+			.join("");
+		message += `<div class="alert alert-warning" style="margin-bottom:8px">${__(
+			"Cancelling {0} reduces stock again: everything it brought in leaves the warehouse.",
+			[esc(frm.doc.name)]
+		)}</div><ul style="margin:0 0 8px 16px">${stock_list}</ul>`;
+	}
+	if (impact.tags) {
+		const list = impact.items.map((r) => `<li>${esc(r.item_name || r.item_code)} (${esc(r.item_code)}): <b>${r.tags}</b></li>`).join("");
+		message += `<div class="alert alert-warning" style="margin-bottom:8px">${__(
+			"All <b>{0}</b> RFID tag(s) put on its garments become free. Those garments stop counting as tagged stock and the tags can go on other garments.",
+			[impact.tags]
+		)}</div><ul style="margin:0 0 8px 16px">${list}</ul>`;
+	}
 	await new Promise((resolve) => {
 		let answered = false;
 		const d = new frappe.ui.Dialog({
-			title: __("Cancel will free RFID tags"),
+			title: impact.tags
+				? takes_stock
+					? __("Cancel will reduce stock and free RFID tags")
+					: __("Cancel will free RFID tags")
+				: __("Cancel will reduce stock"),
 			fields: [
 				{
 					fieldtype: "HTML",
-					options: `<div class="alert alert-warning" style="margin-bottom:8px">${__(
-						"Cancelling {0} frees all <b>{1}</b> RFID tag(s) put on its garments. Those garments stop counting as tagged stock and the tags can go on other garments.",
-						[esc(frm.doc.name), impact.tags]
-					)}</div><ul style="margin:0 0 8px 16px">${list}</ul><p class="text-muted small">${__(
-						"Only cancel if this document is wrong. To fix just a wrong tag, use Remove tags at the RFID station and tag the piece again with the RFID Tags button."
-					)}</p>`,
+					options: `${message}<p class="text-muted small">${
+						impact.tags
+							? __("Only cancel if this document is wrong. To fix just a wrong tag, use Remove tags at the RFID station and tag the piece again with the RFID Tags button.")
+							: __("Only cancel if this document is wrong.")
+					}</p>`,
 				},
 			],
-			primary_action_label: __("Cancel and free tags"),
+			primary_action_label: impact.tags ? __("Cancel and free tags") : __("Cancel anyway"),
 			primary_action: () => {
 				answered = true;
 				d.hide();
