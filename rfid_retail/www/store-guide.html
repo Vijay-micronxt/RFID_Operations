@@ -6,600 +6,816 @@
 <title>Store Guide</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Mukta:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
-/* Layout: each lesson = simple numbered steps on the left + a drawn screen on the right whose numbered markers match the steps. */
+/* Layout: course sidebar (modules > lessons, progress) + one lesson at a time; each lesson = real screenshot with numbered pins, steps keyed to the pins, field table, desk links. */
 :root {
-  --ink: #17212b;
-  --muted: #5a6774;
-  --paper: #f4f6f3;
+  --ink: #171f29;
+  --muted: #5d6875;
+  --paper: #f5f6f8;
   --card: #ffffff;
-  --line: #dde3df;
-  --accent: #0a7a6a;
-  --accent-soft: #dff2ed;
+  --line: #e1e4e9;
+  --accent: #2563eb;
+  --accent-soft: #e8efff;
+  --good: #0f7b5f;
+  --good-soft: #e1f4ee;
   --warn: #b45309;
-  --warn-soft: #fdf0de;
+  --warn-soft: #fdf1e1;
   --bad: #b42318;
-  --bad-soft: #fde9e7;
-  --screen: #eef1ef;
-  --display: "Baloo 2", "Trebuchet MS", Arial, sans-serif;
-  --body: "Mukta", "Segoe UI", Roboto, Arial, sans-serif;
+  --bad-soft: #fdebe9;
+  --pin: #f97316;
+  --body: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ink: #e8ede9; --muted: #a0ada7; --paper: #10161b; --card: #182129; --line: #2b3741;
-    --accent: #3cc4ae; --accent-soft: #14332e; --warn: #f2a54b; --warn-soft: #33250e;
-    --bad: #f27b6f; --bad-soft: #3b1c1a; --screen: #111a20; color-scheme: dark;
+    --ink: #e6e9ee; --muted: #9aa4b1; --paper: #0f141a; --card: #171e26; --line: #28313c;
+    --accent: #6b9bff; --accent-soft: #1b2740; --good: #4cc99f; --good-soft: #13302a;
+    --warn: #f0a54d; --warn-soft: #33260f; --bad: #f27a6e; --bad-soft: #3a1c1a; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --ink: #e8ede9; --muted: #a0ada7; --paper: #10161b; --card: #182129; --line: #2b3741;
-  --accent: #3cc4ae; --accent-soft: #14332e; --warn: #f2a54b; --warn-soft: #33250e;
-  --bad: #f27b6f; --bad-soft: #3b1c1a; --screen: #111a20; color-scheme: dark;
+  --ink: #e6e9ee; --muted: #9aa4b1; --paper: #0f141a; --card: #171e26; --line: #28313c;
+  --accent: #6b9bff; --accent-soft: #1b2740; --good: #4cc99f; --good-soft: #13302a;
+  --warn: #f0a54d; --warn-soft: #33260f; --bad: #f27a6e; --bad-soft: #3a1c1a; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { background: var(--paper); color: var(--ink); font: 18px/1.6 var(--body); }
+body { background: var(--paper); color: var(--ink); font: 16px/1.6 var(--body); }
 a { color: var(--accent); }
-a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.15; margin: 0; }
-h1 { font-size: clamp(32px, 5.5vw, 50px); font-weight: 800; }
-h2 { font-size: clamp(26px, 3.6vw, 34px); font-weight: 800; }
-h3 { font-size: 23px; font-weight: 600; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
 p { margin: 0; }
-code { font-family: var(--mono); font-size: 0.82em; background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; }
-.wrap { max-width: 1120px; margin: 0 auto; padding: 0 18px; }
+code, kbd { font-family: var(--mono); font-size: 0.85em; background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; }
+.btn { display: inline-block; font-weight: 600; font-size: 0.86em; background: var(--ink); color: var(--paper); border-radius: 6px; padding: 1px 8px; white-space: nowrap; }
 
+/* top bar */
+.bar { position: sticky; top: 0; z-index: 10; background: var(--card); border-bottom: 1px solid var(--line); height: 58px; display: flex; align-items: center; gap: 14px; padding: 0 18px; }
+.bar .logo { width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 800; }
+.bar b { font-size: 16px; }
+.bar small { color: var(--muted); font-size: 13px; display: block; line-height: 1.1; }
+.bar .grow { flex: 1; }
+.bar a.go { text-decoration: none; font-weight: 600; font-size: 14px; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; }
+.bar a.go:hover { border-color: var(--accent); color: var(--accent); }
+.menu-btn { display: none; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px; padding: 6px 10px; font: 600 14px var(--body); }
+@media (max-width: 920px) { .menu-btn { display: inline-block; } .bar a.go.hide-s { display: none; } }
 
-/* top */
-header.top { background: var(--card); border-bottom: 1px solid var(--line); padding: 26px 0 30px; }
-.top .wrap { display: grid; gap: 16px; }
-.toprow { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.open { display: flex; gap: 8px; flex-wrap: wrap; }
-.open a { font-weight: 700; font-size: 15px; text-decoration: none; border: 2px solid var(--accent); border-radius: 999px; padding: 4px 14px; }
-.open a:hover { background: var(--accent-soft); }
-.kicker { font-weight: 700; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
-.lede { max-width: 62ch; color: var(--muted); font-size: 20px; }
-.who { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.who a { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: center; text-decoration: none; color: var(--ink); background: var(--paper); border: 2px solid var(--line); border-radius: 14px; padding: 14px; }
-.who a:hover { border-color: var(--accent); }
-.who b { font: 800 21px/1.1 var(--display); display: block; }
-.who small { color: var(--muted); font-size: 15px; line-height: 1.3; display: block; }
-@media (max-width: 760px) { .who { grid-template-columns: 1fr; } }
-.ico { width: 56px; height: 56px; border-radius: 14px; background: var(--accent-soft); display: grid; place-items: center; }
-.ico svg { width: 32px; height: 32px; stroke: var(--accent); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* shell */
+.shell { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: calc(100vh - 58px); }
+aside { background: var(--card); border-right: 1px solid var(--line); padding: 16px 14px 40px; position: sticky; top: 58px; height: calc(100vh - 58px); overflow-y: auto; }
+@media (max-width: 920px) { .shell { grid-template-columns: 1fr; } aside { position: fixed; z-index: 9; left: 0; width: min(320px, 88vw); transform: translateX(-102%); transition: transform .2s; } aside.open { transform: none; box-shadow: 0 10px 40px rgba(0,0,0,.25); } }
+.progress { display: grid; gap: 6px; margin-bottom: 14px; }
+.progress .lbl { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-weight: 600; }
+.progress .track { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.progress .track i { display: block; height: 100%; width: 0; background: var(--good); transition: width .3s; }
+#search { width: 100%; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 8px; padding: 8px 10px; font: 14px var(--body); margin-bottom: 10px; }
+.mod { margin-top: 12px; }
+.mod-h { display: flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 4px 6px; }
+.mod-h .who { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 600; background: var(--paper); border: 1px solid var(--line); border-radius: 99px; padding: 0 8px; }
+.nav a { display: flex; gap: 10px; align-items: flex-start; text-decoration: none; color: var(--ink); font-size: 14px; padding: 7px 8px; border-radius: 8px; line-height: 1.35; }
+.nav a:hover { background: var(--paper); }
+.nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.nav a .dot { flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 11px; color: #fff; }
+.nav a.done .dot { background: var(--good); border-color: var(--good); }
+.nav a.done .dot::after { content: "✓"; font-weight: 800; }
 
-/* words */
-.block { padding: 34px 0 6px; display: grid; gap: 16px; }
-.words { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.word { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 8px; align-content: start; }
-.word b { font: 800 20px/1.1 var(--display); }
-.word p { font-size: 16px; color: var(--muted); line-height: 1.45; }
-@media (max-width: 900px) { .words { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 460px) { .words { grid-template-columns: 1fr; } }
+/* lesson */
+main { padding: 28px clamp(16px, 4vw, 48px) 80px; }
+.lesson { display: none; max-width: 980px; margin: 0 auto; gap: 22px; }
+.lesson.on { display: grid; }
+.crumbs { font-size: 13px; color: var(--muted); font-weight: 600; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.crumbs .tag { background: var(--accent-soft); color: var(--accent); padding: 2px 9px; border-radius: 99px; }
+.lesson h2 { font-size: clamp(26px, 3.4vw, 34px); font-weight: 800; }
+.lesson .goal { font-size: 18px; color: var(--muted); max-width: 70ch; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.links a { text-decoration: none; font-size: 14px; font-weight: 600; border: 1px solid var(--accent); color: var(--accent); border-radius: 8px; padding: 5px 11px; background: var(--card); }
+.links a::after { content: " ↗"; }
+.links a:hover { background: var(--accent-soft); }
+h3 { font-size: 19px; font-weight: 700; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 14px; }
 
-/* day strip */
-.strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-.strip div { padding: 16px 12px; display: grid; gap: 6px; justify-items: center; text-align: center; border-right: 1px solid var(--line); position: relative; }
-.strip div:last-child { border-right: 0; }
-.strip .n { font: 800 15px/1 var(--display); background: var(--accent); color: var(--card); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; }
-.strip b { font-size: 16px; line-height: 1.2; }
-.strip span { font-size: 14px; color: var(--muted); line-height: 1.3; }
-@media (max-width: 860px) { .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .strip div { border-bottom: 1px solid var(--line); } }
-
-/* role sections */
-section.role { padding-top: 46px; display: grid; gap: 18px; }
-.rolehead { display: flex; gap: 14px; align-items: center; border-bottom: 3px solid var(--ink); padding-bottom: 12px; }
-.rolehead p { color: var(--muted); font-size: 17px; }
-
-.lesson { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 460px); gap: 26px; align-items: start; }
-.lesson > .txt { display: grid; gap: 14px; }
-.lesson .where { font-size: 15px; color: var(--muted); }
-.lesson .where b { color: var(--ink); }
-@media (max-width: 880px) { .lesson { grid-template-columns: 1fr; } }
+/* screenshot with pins */
+figure.shot { margin: 0; display: grid; gap: 10px; }
+.frame { position: relative; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); box-shadow: 0 8px 30px rgba(15, 23, 42, .08); }
+.frame .chrome { height: 26px; background: var(--paper); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12px; color: var(--muted); }
+.frame .chrome i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.frame .chrome span { margin-left: 8px; font-family: var(--mono); }
+.pic { position: relative; }
+.pic img { display: block; width: 100%; height: auto; }
+.pin { position: absolute; left: calc(var(--x) / 1366 * 100%); top: calc(var(--y) / 593 * 100%); transform: translate(-95%, -55%); width: 28px; height: 28px; border-radius: 50%; background: var(--pin); color: #fff; font: 800 14px/28px var(--body); text-align: center; box-shadow: 0 0 0 3px #fff, 0 2px 8px rgba(0,0,0,.35); }
+figcaption { font-size: 14px; color: var(--muted); text-align: center; }
 
 ol.steps { margin: 0; padding: 0; display: grid; gap: 12px; counter-reset: s; }
-ol.steps > li { list-style: none; position: relative; padding: 4px 0 0 48px; min-height: 36px; counter-increment: s; }
-ol.steps > li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--warn); color: #fff; font: 800 18px/36px var(--display); text-align: center; }
-.btn { display: inline-block; font: 700 0.85em/1.35 var(--body); background: var(--ink); color: var(--paper); border-radius: 6px; padding: 1px 9px; white-space: nowrap; }
+ol.steps > li { list-style: none; position: relative; padding: 3px 0 0 42px; min-height: 30px; counter-increment: s; max-width: 76ch; }
+ol.steps > li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--pin); color: #fff; font: 800 14px/30px var(--body); text-align: center; }
+ol.steps.plain > li::before { background: var(--ink); color: var(--paper); }
 
-.do, .dont, .tip { border-radius: 10px; padding: 12px 14px 12px 50px; font-size: 16px; position: relative; line-height: 1.45; }
-.do { background: var(--accent-soft); }
-.dont { background: var(--bad-soft); }
-.tip { background: var(--warn-soft); }
-.do::before, .dont::before, .tip::before { position: absolute; left: 14px; top: 11px; width: 24px; height: 24px; border-radius: 50%; color: #fff; font: 800 15px/24px var(--display); text-align: center; }
-.do::before { content: "✓"; background: var(--accent); }
-.dont::before { content: "✕"; background: var(--bad); }
-.tip::before { content: "i"; background: var(--warn); font-style: italic; }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--paper); }
+td:first-child { font-weight: 600; white-space: nowrap; }
+td .req { color: var(--bad); font-weight: 700; }
+td.ex { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.when { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+.when.once { background: var(--accent-soft); color: var(--accent); }
+.when.each { background: var(--good-soft); color: var(--good); }
+.when.opt { background: var(--paper); color: var(--muted); border: 1px solid var(--line); }
 
-/* drawn screens */
-.screen { background: var(--screen); border: 2px solid var(--line); border-radius: 12px; padding: 12px 12px 12px 30px; display: grid; gap: 8px; font-size: 14px; line-height: 1.35; position: relative; }
-.screen .title { display: flex; gap: 6px; align-items: center; font-weight: 700; font-size: 13px; color: var(--muted); }
-.screen .title i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: inline-block; }
-.s-box { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-.s-row { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-.s-in { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--muted); flex: 1; }
-.s-btn { background: var(--accent); color: #fff; border-radius: 8px; padding: 7px 12px; font-weight: 700; white-space: nowrap; }
-.s-btn.dark { background: var(--ink); color: var(--paper); }
-.s-btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
-.s-btn.red { background: var(--bad); }
-.s-check { display: flex; gap: 8px; align-items: center; }
-.s-check .bx { width: 18px; height: 18px; border-radius: 4px; background: var(--accent); color: #fff; font-size: 13px; display: grid; place-items: center; font-weight: 800; }
-.s-check .bx.off { background: var(--card); border: 1px solid var(--line); }
-.pill { font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
-.pill.ok { background: var(--accent-soft); color: var(--accent); }
-.pill.no { background: var(--bad-soft); color: var(--bad); }
-.pill.wait { background: var(--warn-soft); color: var(--warn); }
-.s-bar { height: 10px; border-radius: 99px; background: var(--line); overflow: hidden; }
-.s-bar i { display: block; height: 100%; background: var(--accent); }
-.s-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px; }
-.s-item { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px; display: grid; gap: 4px; text-align: center; font-size: 12px; }
-.s-item .img { height: 34px; border-radius: 6px; background: var(--accent-soft); }
-.s-items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.s-set { background: var(--warn-soft); border: 1px solid var(--warn); border-radius: 8px; padding: 8px; display: grid; gap: 5px; }
-.s-err { background: var(--bad-soft); color: var(--bad); border-radius: 6px; padding: 5px 8px; font-size: 12px; }
-.s-total { font: 800 18px/1.1 var(--display); }
-.mk { position: absolute; width: 28px; height: 28px; border-radius: 50%; background: var(--warn); color: #fff; font: 800 15px/28px var(--display); text-align: center; box-shadow: 0 0 0 3px var(--card); z-index: 2; }
-.cap { font-size: 14px; color: var(--muted); text-align: center; }
-.rel { position: relative; }
+.box { border-radius: 12px; padding: 14px 16px 14px 52px; position: relative; font-size: 15px; max-width: 80ch; }
+.box::before { position: absolute; left: 16px; top: 14px; width: 24px; height: 24px; border-radius: 50%; color: #fff; font: 800 13px/24px var(--body); text-align: center; }
+.box b.t { display: block; margin-bottom: 2px; }
+.box.do { background: var(--good-soft); } .box.do::before { content: "✓"; background: var(--good); }
+.box.dont { background: var(--bad-soft); } .box.dont::before { content: "✕"; background: var(--bad); }
+.box.tip { background: var(--warn-soft); } .box.tip::before { content: "i"; background: var(--warn); font-style: italic; }
 
-/* problems */
-.probs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.prob { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 8px; align-content: start; }
-.prob .see { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 7px 10px; font-size: 15px; font-weight: 600; }
-.prob .fix { font-size: 16px; }
-.prob .fix b { color: var(--accent); }
-@media (max-width: 760px) { .probs { grid-template-columns: 1fr; } }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 760px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 6px; align-content: start; }
+.tile .ic { font-size: 26px; line-height: 1; }
+.tile b { font-size: 17px; }
+.tile p { color: var(--muted); font-size: 14.5px; }
+a.tile { text-decoration: none; color: var(--ink); }
+a.tile:hover { border-color: var(--accent); }
+.flow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--card); }
+.flow div { padding: 14px 10px; text-align: center; border-right: 1px solid var(--line); display: grid; gap: 4px; justify-items: center; }
+.flow div:last-child { border-right: 0; }
+.flow .n { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; font-size: 13px; display: grid; place-items: center; }
+.flow b { font-size: 14.5px; line-height: 1.25; }
+.flow span { font-size: 13px; color: var(--muted); line-height: 1.3; }
+@media (max-width: 860px) { .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .flow div { border-bottom: 1px solid var(--line); } }
 
-footer { border-top: 1px solid var(--line); margin-top: 50px; padding: 24px 0 40px; color: var(--muted); font-size: 15px; }
-@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+.foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 18px; align-items: center; }
+.foot button, .foot a.nx { font: 600 15px var(--body); border-radius: 10px; padding: 10px 16px; cursor: pointer; text-decoration: none; }
+.foot .prev { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+.foot .next { background: var(--accent); color: #fff; border: 0; }
+.foot .mark { background: var(--good-soft); color: var(--good); border: 1px solid var(--good); }
+.foot .mark.done { background: var(--good); color: #fff; }
+.foot .gap { flex: 1; }
+@media (prefers-reduced-motion: reduce) { aside, .progress .track i { transition: none; } }
 </style>
 </head>
 <body>
 
-<header class="top">
-  <div class="wrap">
-    <div class="toprow">
-      <span class="kicker">Store guide</span>
-      <span class="open"><a href="/pos">Open POS</a><a href="/rfid">Open RFID station</a></span>
-    </div>
-    <h1>How to run the RFID store</h1>
-    <p class="lede">
-      
-      Every garment carries a small RFID tag. Put the garment on the counter tray and the bill fills itself. Pick your job below and follow the steps.
-    </p>
-    <nav class="who" aria-label="Pick your job">
-      <a href="#manager">
-        <span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/><path d="M17 3l2 2-2 2"/></svg></span>
-        <span><b>Manager</b><small>One-time setup</small></span>
-      </a>
-      <a href="#stock">
-        <span class="ico"><svg viewBox="0 0 24 24"><path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/></svg></span>
-        <span><b>Stock staff</b><small>Receive, tag, count</small></span>
-      </a>
-      <a href="#cashier">
-        <span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M7 9v.01M17 15v.01"/></svg></span>
-        <span><b>Cashier</b><small>Billing and payment</small></span>
-      </a>
-    </nav>
-  </div>
+<header class="bar">
+  <button class="menu-btn" id="menu-btn" type="button" aria-controls="side" aria-expanded="false">☰ Lessons</button>
+  <span class="logo">SG</span>
+  <div><b>Store Guide</b><small>RFID Retail + POS Next</small></div>
+  <span class="grow"></span>
+  <a class="go hide-s" href="/app">Desk</a>
+  <a class="go hide-s" href="/rfid">RFID station</a>
+  <a class="go" href="/pos">POS</a>
 </header>
 
-<main class="wrap">
+<div class="shell">
+  <aside id="side" aria-label="Lessons">
+    <div class="progress"><div class="lbl"><span>Your progress</span><span id="prog-txt">0 of 0</span></div><div class="track"><i id="prog-bar"></i></div></div>
+    <input id="search" type="search" placeholder="Search lessons, e.g. payment" aria-label="Search lessons">
+    <nav class="nav" id="nav"></nav>
+  </aside>
 
-  <!-- 4 WORDS -->
-  <div class="block">
-    <h2>First, four words</h2>
-    <div class="words">
-      <div class="word">
-        <span class="ico"><svg viewBox="0 0 24 24"><path d="M3 12l9-9h8v8l-9 9z"/><circle cx="16" cy="8" r="1.5"/></svg></span>
-        <b>Tag</b>
-        <p>A small sticker with a chip on the garment. Each has a code. After a sale the same tag goes on a new garment.</p>
-      </div>
-      <div class="word">
-        <span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="10" width="18" height="8" rx="2"/><path d="M7 10V7M12 10V5M17 10V7"/></svg></span>
-        <b>Tray</b>
-        <p>The reader plate on the counter. Put garments on it and it reads all tags at once.</p>
-      </div>
-      <div class="word">
-        <span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-        <b>Shift</b>
-        <p>The counter's working day. Open it in the morning with the drawer cash, close it at night and count.</p>
-      </div>
-      <div class="word">
-        <span class="ico"><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></span>
-        <b>Station <code>/rfid</code></b>
-        <p>The page on a phone or PC where tags are put on, taken off and stock is counted.</p>
-      </div>
-    </div>
-  </div>
+  <main id="main">
 
-  <!-- DAY -->
-  <div class="block">
-    <h2>A day in the store</h2>
-    <div class="strip">
-      <div><span class="n">1</span><b>Stock arrives</b><span>Purchase Receipt submitted</span></div>
-      <div><span class="n">2</span><b>Price stickers</b><span>Print Stickers button</span></div>
-      <div><span class="n">3</span><b>Put tags on</b><span>RFID Tags button</span></div>
-      <div><span class="n">4</span><b>Sell</b><span>Tray reads, POS bills</span></div>
-      <div><span class="n">5</span><b>Tag is free</b><span>Freed after the bill</span></div>
-      <div><span class="n">6</span><b>Count and close</b><span>Count stock, close shift</span></div>
-    </div>
-  </div>
+  <!-- ============ MODULE 1: START HERE ============ -->
+  <article class="lesson" id="welcome" data-module="Start here" data-who="Everyone" data-time="3 min">
+    <div class="crumbs"><span class="tag">Start here</span><span>Everyone · 3 min</span></div>
+    <h2>How the store works</h2>
+    <p class="goal">Every garment carries a small reusable RFID tag. Stock staff put the tags on when stock arrives. At the counter the cashier puts the garments on a tray, the tray reads all tags at once and POS Next makes the bill. This guide walks you through every screen.</p>
 
-  <!-- MANAGER -->
-  <section class="role" id="manager">
-    <div class="rolehead">
-      <span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>
-      <div><h2>Manager</h2><p>Done once, before the first sale, in the ERPNext desk.</p></div>
+    <div class="grid3">
+      <div class="tile"><span class="ic">🏷️</span><b>Tag</b><p>A sticker or hang tag with a chip. Each has its own code. After a sale the same tag goes on a new garment.</p></div>
+      <div class="tile"><span class="ic">📥</span><b>Tray</b><p>The reader plate on the counter. Put garments on it and it reads every tag together, like a barcode scanner that sees many codes.</p></div>
+      <div class="tile"><span class="ic">🕘</span><b>Shift</b><p>The counter's working day in POS Next. Open it with the drawer cash in the morning, close it and count at night.</p></div>
     </div>
 
-    <article class="lesson">
-      <div class="txt">
-        <h3>Switch RFID on</h3>
-        <div class="where">Search in the desk: <b>RFID Settings</b></div>
-        <ol class="steps">
-          <li>Tick <b>Enable RFID</b>. Nothing works without it.</li>
-          <li>In <b>Station access</b> choose who does what. The default is fine: cashier bills, stock staff tag, manager does everything.</li>
-          <li>Give every <b>User</b> a role: <i>RFID Cashier</i>, <i>RFID Stock Operator</i> or <i>RFID Store Manager</i>. Cashiers also get <i>POSNext Cashier</i>.</li>
-        </ol>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> RFID Settings</div>
-          <div class="s-box rel"><span class="mk" style="left:-24px;top:-10px">1</span><div class="s-check"><span class="bx">✓</span><b>Enable RFID</b></div></div>
-          <div class="s-box rel" style="display:grid;gap:5px"><span class="mk" style="left:-24px;top:-10px">2</span>
-            <b>Station access</b>
-            <div class="s-row"><span>Billing</span><span class="pill ok">RFID Cashier</span></div>
-            <div class="s-row"><span>Tag Mapping</span><span class="pill ok">RFID Stock Operator</span></div>
-            <div class="s-row"><span>Stock Audit</span><span class="pill ok">RFID Stock Operator</span></div>
-          </div>
-          <div class="s-row"><span></span><span class="s-btn dark">Save</span></div>
-        </div>
-      </div>
-    </article>
-
-    <article class="lesson">
-      <div class="txt">
-        <h3>Set up the counter</h3>
-        <div class="where"><b>POS Profile</b>, <b>RFID Device</b>, <b>POS Settings</b></div>
-        <ol class="steps">
-          <li>Open the <b>POS Profile</b>: fill warehouse, walk-in customer, payments (Cash, UPI, Card). Add the cashiers under <b>Applicable for Users</b>.</li>
-          <li>Tick <b>RFID Counter</b> on the same profile.</li>
-          <li>Create an <b>RFID Device</b>: type <i>Tray Reader</i>, linked to this POS Profile.</li>
-          <li>In <b>POS Settings</b> tick <b>Tax Inclusive</b> (MRP already includes GST).</li>
-        </ol>
-        <p class="tip">The reader works like a barcode scanner. Plug it in, nothing to install.</p>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> POS Profile: Counter 1</div>
-          <div class="s-box rel" style="display:grid;gap:4px"><span class="mk" style="left:-24px;top:-10px">1</span>
-            <div class="s-row"><span>Warehouse</span><b>Stores - HC</b></div>
-            <div class="s-row"><span>Customer</span><b>Walk-in Customer</b></div>
-            <div class="s-row"><span>Payments</span><span><span class="pill ok">Cash</span> <span class="pill ok">UPI</span> <span class="pill ok">Card</span></span></div>
-            <div class="s-row"><span>Applicable for Users</span><b>billing1</b></div>
-          </div>
-          <div class="s-box rel"><span class="mk" style="left:-24px;top:-10px">2</span><div class="s-check"><span class="bx">✓</span><b>RFID Counter</b></div></div>
-          <div class="s-box rel"><span class="mk" style="left:-24px;top:-10px">3</span><div class="s-row"><span>RFID Device</span><b>TRAY-1 · Tray Reader</b></div></div>
-          <div class="s-box rel"><span class="mk" style="left:-24px;top:-10px">4</span><div class="s-check"><span class="bx">✓</span><b>Tax Inclusive</b></div></div>
-        </div>
-      </div>
-    </article>
-
-    <article class="lesson">
-      <div class="txt">
-        <h3>Which items carry tags</h3>
-        <div class="where"><b>Item</b> (set it on the template, all sizes and colours follow)</div>
-        <ol class="steps">
-          <li>Tick <b>RFID Tracked Garment</b>. That is enough.</li>
-          <li>For a <b>set</b> (suit = jacket + trouser): tick <i>Has Serial No</i> and list the pieces in a <b>Garment Set Definition</b>. A set sells only when every piece is at the counter.</li>
-        </ol>
-        <p class="tip">Stock already in the store has no tags. It all shows in the station's <b>To tag</b> list. Tag it there before the first sale.</p>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> Item: FORMAL-SHIRT</div>
-          <div class="s-box rel"><span class="mk" style="left:-24px;top:-10px">1</span><div class="s-check"><span class="bx">✓</span><b>RFID Tracked Garment</b></div></div>
-          <div class="s-box rel" style="display:grid;gap:5px"><span class="mk" style="left:-24px;top:-10px">2</span>
-            <div class="s-row"><b>Garment Set Definition</b><span class="pill wait">sets only</span></div>
-            <div class="s-row"><span>Piece 1</span><b>JKT · Jacket</b></div>
-            <div class="s-row"><span>Piece 2</span><b>TRS · Trouser</b></div>
-          </div>
-        </div>
-      </div>
-    </article>
-  </section>
-
-  <!-- STOCK -->
-  <section class="role" id="stock">
-    <div class="rolehead">
-      <span class="ico"><svg viewBox="0 0 24 24"><path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5"/></svg></span>
-      <div><h2>Stock staff</h2><p>Receiving, stickers, tagging and the daily count.</p></div>
+    <h3>A day in the store</h3>
+    <div class="flow">
+      <div><span class="n">1</span><b>Stock arrives</b><span>Purchase Receipt</span></div>
+      <div><span class="n">2</span><b>Stickers</b><span>Print Stickers</span></div>
+      <div><span class="n">3</span><b>Tags on</b><span>RFID Tags button</span></div>
+      <div><span class="n">4</span><b>Sell</b><span>Tray + POS Next</span></div>
+      <div><span class="n">5</span><b>Tag free</b><span>Reused by itself</span></div>
+      <div><span class="n">6</span><b>Count, close</b><span>Stock count, Close Shift</span></div>
     </div>
 
-    <article class="lesson">
-      <div class="txt">
-        <h3>Stock arrived: entry and stickers</h3>
-        <div class="where"><b>Purchase Receipt</b> or <b>Purchase Invoice</b> + <b>Update Stock</b> ✓</div>
-        <ol class="steps">
-          <li>Fill supplier and items. <b>MRP</b> fills itself (rate + GST + margin). You can type the MRP instead.</li>
-          <li>Press <span class="btn">Submit</span>. The item's selling price becomes the MRP.</li>
-          <li>Press <span class="btn">Print Stickers</span>, type how many per row, Save, Print.</li>
-        </ol>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> Purchase Receipt PR-26-00014 · <span class="pill ok">Submitted</span></div>
-          <div class="s-row rel"><span class="mk" style="right:-10px;top:-14px">3</span><span></span><span style="display:flex;gap:6px"><span class="s-btn ghost">Print Stickers</span><span class="s-btn">RFID Tags</span></span></div>
-          <div class="s-box rel" style="display:grid;gap:4px"><span class="mk" style="left:-24px;top:-10px">1</span>
-            <div class="s-row" style="color:var(--muted);font-size:12px"><span>Item</span><span>Qty · Rate · MRP</span></div>
-            <div class="s-row"><b>Formal Shirt Red 40</b><span>12 · ₹ 980 · <b>₹ 1,190</b></span></div>
-            <div class="s-row"><b>Cotton Kurta White M</b><span>8 · ₹ 640 · <b>₹ 780</b></span></div>
-          </div>
-          <div class="s-row rel"><span class="mk" style="left:-24px;top:-6px">2</span><span style="padding-left:14px;color:var(--muted)">Submit ✓</span></div>
-        </div>
-      </div>
-    </article>
-
-    <article class="lesson" id="tag-doc">
-      <div class="txt">
-        <h3>Put tags on (the easy way)</h3>
-        <div class="where">Same submitted document &rarr; <span class="btn">RFID Tags</span></div>
-        <ol class="steps">
-          <li>Pick the row, e.g. <i>Formal Shirt Red 40 (12 pieces)</i>.</li>
-          <li>Put on 12 tags and hold them all on the reader together. Any tag can go on any piece.</li>
-          <li>Green tags are fine. A <b>red</b> one is bad or already used: take it off, use another.</li>
-          <li>It saves by itself when the count is right. Leftovers can be tagged later.</li>
-        </ol>
-        <p class="do">Read tags on the wrong row? Use <span class="btn">Check stickers / move tags</span> in the same dialog. No cancel needed.</p>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> RFID Tags</div>
-          <div class="s-box rel"><span class="mk" style="left:-24px;top:-10px">1</span><div class="s-row"><span>Row</span><b>Formal Shirt Red 40 · 12</b></div></div>
-          <div class="s-box rel" style="display:grid;gap:6px"><span class="mk" style="left:-24px;top:-10px">2</span>
-            <div class="s-row"><b>11 / 12</b><span style="color:var(--muted)">tags read</span></div>
-            <div class="s-bar"><i style="width:92%"></i></div>
-          </div>
-          <div class="s-box rel" style="display:grid;gap:4px;font-family:var(--mono);font-size:12px"><span class="mk" style="left:-24px;top:-10px">3</span>
-            <div class="s-row"><span>E2801170…3A41</span><span class="pill ok">OK</span></div>
-            <div class="s-row"><span>E2801170…3A42</span><span class="pill ok">OK</span></div>
-            <div class="s-row"><span>E2801170…19F0</span><span class="pill no">Already used</span></div>
-          </div>
-          <div class="s-row rel"><span class="mk" style="left:-24px;top:-4px">4</span><span style="padding-left:14px;color:var(--muted)">12 / 12 &rarr; Saved ✓</span><span class="s-btn">Save tags</span></div>
-        </div>
-      </div>
-    </article>
-
-    <article class="lesson">
-      <div class="txt">
-        <h3>Tag at the station</h3>
-        <div class="where"><code>/rfid</code> &rarr; <b>To tag</b></div>
-        <ol class="steps">
-          <li>The list shows how many pieces of each item still need a tag: old stock, returns.</li>
-          <li>Pick the item (or scan its barcode), hold all its tags on the reader. Count right, saved.</li>
-          <li><b>Sets</b> and <b>returns</b> go one by one: the screen asks for each piece's tag.</li>
-        </ol>
-        <p class="do"><b>Tag history</b> tab: read any tag to see its full story: which garment, who sold it, for how much.</p>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> /rfid · To tag</div>
-          <div class="s-box rel" style="display:grid;gap:5px"><span class="mk" style="left:-24px;top:-10px">1</span>
-            <div class="s-row"><b>Formal Shirt Red 40</b><span class="pill wait">5 to tag</span></div>
-            <div class="s-row"><b>Cotton Kurta White M</b><span class="pill wait">3 to tag</span></div>
-            <div class="s-row"><b>Wedding Suit Navy 40</b><span class="pill wait">set · 1</span></div>
-          </div>
-          <div class="s-box rel" style="display:grid;gap:6px"><span class="mk" style="left:-24px;top:-10px">2</span>
-            <div class="s-row"><b>Formal Shirt Red 40</b><span>5 / 5</span></div>
-            <div class="s-bar"><i style="width:100%"></i></div>
-            <div class="s-row"><span class="pill ok">Saved ✓</span><span class="s-btn ghost">Done</span></div>
-          </div>
-          <div class="s-box rel"><span class="mk" style="left:-24px;top:-10px">3</span><div class="s-row"><span>Scan the tag for <b>TRS</b></span><span><span class="pill ok">✓ JKT</span> <span class="pill wait">TRS</span></span></div></div>
-        </div>
-      </div>
-    </article>
-
-    <article class="lesson">
-      <div class="txt">
-        <h3>Daily stock count</h3>
-        <div class="where"><code>/rfid</code> &rarr; <b>Stock count</b></div>
-        <ol class="steps">
-          <li>Pick the warehouse, press <span class="btn">Start today's count</span>.</li>
-          <li>Walk the floor with the handheld and scan every tag. Each piece gets ticked.</li>
-          <li><span class="btn">Finish count &amp; show result</span>: what was found, what is missing.</li>
-          <li><span class="btn">Send for review</span>. A manager checks it. Counting never changes stock.</li>
-        </ol>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> /rfid · Stock count</div>
-          <div class="s-row rel"><span class="mk" style="left:-24px;top:-8px">1</span><span class="s-in">Stores - HC</span><span class="s-btn">Start today's count</span></div>
-          <div class="s-box rel" style="display:grid;gap:5px"><span class="mk" style="left:-24px;top:-10px">2</span>
-            <div class="s-row"><span>✓ Formal Shirt Red 40</span><b>12 / 12</b></div>
-            <div class="s-row"><span>✓ Cotton Kurta White M</span><b>8 / 8</b></div>
-            <div class="s-row"><span style="color:var(--bad)">✕ Silk Saree Green</span><b style="color:var(--bad)">3 / 4</b></div>
-          </div>
-          <div class="s-row rel"><span class="mk" style="left:-24px;top:-6px">3</span><span style="padding-left:14px"><span class="pill ok">Matched 20</span> <span class="pill no">Missing 1</span></span><span class="s-btn dark">Send for review</span></div>
-        </div>
-      </div>
-    </article>
-  </section>
-
-  <!-- CASHIER -->
-  <section class="role" id="cashier">
-    <div class="rolehead">
-      <span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg></span>
-      <div><h2>Cashier</h2><p>Open <code>/pos</code> in the browser and log in with your own user.</p></div>
+    <h3>Pick your path</h3>
+    <div class="grid3">
+      <a class="tile" href="#rfid-settings"><span class="ic">🧭</span><b>Manager</b><p>One-time setup: RFID Settings, the counter, items and sets.</p></a>
+      <a class="tile" href="#receive"><span class="ic">📦</span><b>Stock staff</b><p>Receive stock, print stickers, put tags on, count the floor.</p></a>
+      <a class="tile" href="#sale-screen"><span class="ic">🧾</span><b>Cashier</b><p>Open the shift, bill on the tray, take payment, close the shift.</p></a>
     </div>
+  </article>
 
-    <article class="lesson">
-      <div class="txt">
-        <h3>Morning: open the shift</h3>
-        <ol class="steps">
-          <li>Press <span class="btn">Open Shift</span>.</li>
-          <li>Pick your counter (POS Profile).</li>
-          <li>Type the cash in the drawer, then <span class="btn">Open Shift</span>.</li>
-        </ol>
-        <p class="tip">"Existing Shift Found" means yesterday's shift is still open. Press <span class="btn">Resume Shift</span> or <span class="btn">Close &amp; Open New</span>.</p>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> Open POS Shift</div>
-          <div class="s-box rel"><span class="mk" style="left:-24px;top:-10px">2</span><div class="s-row"><span>POS Profile</span><b>Counter 1 ▾</b></div></div>
-          <div class="s-box rel" style="display:grid;gap:4px"><span class="mk" style="left:-24px;top:-10px">3</span>
-            <span style="color:var(--muted)">Opening Balance</span>
-            <div class="s-row"><span>Cash</span><b>₹ 2,000</b></div>
-            <div class="s-row"><span>UPI</span><b>₹ 0</b></div>
-          </div>
-          <div class="s-row rel"><span class="mk" style="left:-24px;top:-6px">1</span><span></span><span class="s-btn">Open Shift</span></div>
-        </div>
-      </div>
-    </article>
+  <article class="lesson" id="where" data-module="Start here" data-who="Everyone" data-time="2 min">
+    <div class="crumbs"><span class="tag">Start here</span><span>Everyone · 2 min</span></div>
+    <h2>The three places you work</h2>
+    <p class="goal">Everything happens in one of three pages. Log in with your own user; you only see what your role allows.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Page</th><th>Address</th><th>Who</th><th>What for</th></tr></thead>
+      <tbody>
+        <tr><td>POS Next</td><td><a href="/pos"><code>/pos</code></a></td><td>Cashier</td><td>Shift, billing, payment, returns, closing</td></tr>
+        <tr><td>RFID station</td><td><a href="/rfid"><code>/rfid</code></a></td><td>Stock staff, manager</td><td>Tag garments, tag history, remove tags, stock count</td></tr>
+        <tr><td>ERPNext desk</td><td><a href="/app"><code>/app</code></a></td><td>Back office, manager</td><td>Purchases, stickers, settings, reports</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Roles</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Role</th><th>Give it to</th><th>Can do</th></tr></thead>
+      <tbody>
+        <tr><td>RFID Cashier</td><td>Counter staff</td><td>Bill at an RFID counter, remove tags of sold pieces</td></tr>
+        <tr><td>RFID Stock Operator</td><td>Stock staff</td><td>Tag garments, remove tags of sold pieces, stock count</td></tr>
+        <tr><td>RFID Store Manager</td><td>Manager</td><td>Everything, including repairs, removing tags from unsold pieces and overrides</td></tr>
+        <tr><td>RFID Owner</td><td>Owner</td><td>Review stock counts</td></tr>
+        <tr><td>POSNext Cashier</td><td>Every cashier</td><td>Open POS Next</td></tr>
+      </tbody>
+    </table></div>
+    <div class="links"><a href="/app/user">Users</a><a href="/app/rfid-settings">Station access (RFID Settings)</a></div>
+  </article>
 
-    <article class="lesson">
-      <div class="txt">
-        <h3>Billing: garments on the tray</h3>
-        <ol class="steps">
-          <li><b>Put all the customer's garments on the tray.</b> They appear in the cart.</li>
-          <li><b>Orange box</b> = set incomplete (jacket read, trouser not). Put the missing piece on the tray. Payment waits.</li>
-          <li><b>Red line</b> = this tag cannot be sold. Put the garment aside and tell the manager.</li>
-          <li>Type the customer's mobile or name (or leave walk-in), then <span class="btn">Checkout</span>.</li>
-        </ol>
-        <p class="dont">Do not click a tagged garment in the item list. The system blocks it or asks. Always use the tray.</p>
-        <p class="tip">Tag will not read? Tick <b>Tag unreadable - scanning printed labels</b> and scan the sticker's barcode.</p>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> POS Next · Counter 1</div>
-          <div class="s-grid">
-            <div style="display:grid;gap:6px;align-content:start">
-              <div class="s-in" style="font-size:12px">Search items…</div>
-              <div class="s-items">
-                <div class="s-item"><div class="img"></div>Shirt</div>
-                <div class="s-item"><div class="img"></div>Kurta</div>
-                <div class="s-item"><div class="img"></div>Saree</div>
-                <div class="s-item"><div class="img"></div>Suit</div>
-                <div class="s-item"><div class="img"></div>Jeans</div>
-                <div class="s-item"><div class="img"></div>Dupatta</div>
-              </div>
-            </div>
-            <div style="display:grid;gap:6px;align-content:start">
-              <div class="s-row rel"><span class="mk" style="left:-12px;top:-12px">1</span><span class="s-in" style="font-size:12px">Place garments on the tray</span></div>
-              <div class="s-set rel"><span class="mk" style="right:-10px;top:-12px">2</span><b style="font-size:12px">Wedding Suit Navy 40</b><span><span class="pill ok">✓ JKT</span> <span class="pill no">✕ TRS</span></span></div>
-              <div class="s-err rel"><span class="mk" style="right:-10px;top:-12px">3</span>Tag … already sold</div>
-              <div class="s-box" style="display:grid;gap:3px;font-size:12px">
-                <div class="s-row"><span>Shirt Red 40</span><b>2 × 1,190</b></div>
-                <div class="s-row"><span>Kurta White M</span><b>1 × 780</b></div>
-              </div>
-              <div class="s-row rel"><span class="mk" style="left:-12px;top:-6px">4</span><span class="s-total">₹ 3,160</span><span class="s-btn">Checkout</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </article>
+  <!-- ============ MODULE 2: SETUP ============ -->
+  <article class="lesson" id="rfid-settings" data-module="Set up the store" data-who="Manager" data-time="5 min">
+    <div class="crumbs"><span class="tag">Set up the store</span><span>Manager · 5 min · once</span></div>
+    <h2>Switch RFID on</h2>
+    <p class="goal">RFID Settings is the master switch and the rule book: what the counter must check, what happens to a tag after a sale, and who may use each station.</p>
+    <div class="links"><a href="/app/rfid-settings">Open RFID Settings</a></div>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/app/rfid-settings</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/rfid-settings.jpg" alt="RFID Settings form, RFID tab" loading="lazy">
+          <span class="pin" style="--x:352;--y:145">1</span><span class="pin" style="--x:346;--y:269">2</span><span class="pin" style="--x:760;--y:294">3</span><span class="pin" style="--x:765;--y:362">4</span><span class="pin" style="--x:1159;--y:95">5</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li>Tick <b>Enable RFID</b>. While it is off nothing RFID-related runs anywhere.</li>
+      <li>Check the <b>Sale rules</b>. The defaults suit most stores (see the table).</li>
+      <li><b>After A Sale</b>: <i>Free the tag at once</i> means a sold tag can go on new stock straight away.</li>
+      <li><b>Allow removing tags from unsold items</b>: only if the manager should be able to take a tag off stock that was not sold.</li>
+      <li>Scroll down to <b>Station access</b>, give each station to roles, then <span class="btn">Save</span>.</li>
+    </ol>
+    <h3>Fields</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Field</th><th>What to choose</th><th>When</th><th>Default</th></tr></thead>
+      <tbody>
+        <tr><td>Enable RFID</td><td>Tick to switch the app on</td><td><span class="when once">Once</span></td><td class="ex">off</td></tr>
+        <tr><td>Every RFID-tracked unit must be read…</td><td>Keep on: a tagged piece can only be billed after the tray reads it</td><td><span class="when once">Once</span></td><td class="ex">on</td></tr>
+        <tr><td>Accept printed labels when a tag cannot be read</td><td>On: the cashier may scan the sticker barcode instead; each use is logged</td><td><span class="when once">Once</span></td><td class="ex">on</td></tr>
+        <tr><td>Block stock items that are not RFID tracked</td><td>On only if nothing without a tag may ever be sold</td><td><span class="when opt">Optional</span></td><td class="ex">off</td></tr>
+        <tr><td>Check RFID items picked by hand…</td><td>Keep on: the POS warns or blocks when a tagged item is clicked instead of read</td><td><span class="when once">Once</span></td><td class="ex">on</td></tr>
+        <tr><td>After A Sale</td><td><i>Free the tag at once</i>, or keep it until it is read at the Remove tags screen</td><td><span class="when once">Once</span></td><td class="ex">at once</td></tr>
+        <tr><td>Allow removing tags from unsold items</td><td>On lets the Tag Removal station free tags of unsold stock</td><td><span class="when opt">Optional</span></td><td class="ex">off</td></tr>
+        <tr><td>Mark a device offline after (minutes)</td><td>How long a reader may be silent before it is flagged</td><td><span class="when opt">Optional</span></td><td class="ex">15</td></tr>
+        <tr><td>Daily handheld count required</td><td>On raises a Missed Audit alert at 23:00 if nobody counted</td><td><span class="when once">Once</span></td><td class="ex">on</td></tr>
+        <tr><td>Station access</td><td>One row per station and role (Billing → RFID Cashier, Tag Mapping → RFID Stock Operator…)</td><td><span class="when once">Once</span></td><td class="ex">filled</td></tr>
+      </tbody>
+    </table></div>
+    <div class="box tip"><b class="t">Other tabs</b><i>Item Codes</i>, <i>Barcodes &amp; Labels</i> and <i>Purchase Pricing</i> each have their own switch and work even with RFID off. Purchase Pricing is covered in <a href="#receive">Receive stock</a>.</div>
+  </article>
 
-    <article class="lesson">
-      <div class="txt">
-        <h3>Take payment</h3>
-        <ol class="steps">
-          <li>Pick <b>Cash</b>, <b>UPI</b> or <b>Card</b>. Half cash, half UPI also works.</li>
-          <li><b>Remaining</b> must be <b>₹ 0</b>. Extra cash shows as <b>Change Due</b>: give it back.</li>
-          <li>Press <span class="btn">Pay</span>, then <span class="btn">Print Invoice</span>. Done. Tags are freed by themselves.</li>
-        </ol>
-        <p class="do">Customer stepped away? Press <span class="btn">Hold</span>. Open it later from <b>Draft Invoices</b>.</p>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> Complete Payment</div>
-          <div class="s-row"><span>Grand Total</span><span class="s-total">₹ 3,160</span></div>
-          <div class="s-box rel" style="display:grid;gap:4px"><span class="mk" style="left:-24px;top:-10px">1</span>
-            <div class="s-row"><span class="pill ok">Cash</span><b>₹ 2,000</b></div>
-            <div class="s-row"><span class="pill ok">UPI</span><b>₹ 1,160</b></div>
-          </div>
-          <div class="s-box rel"><span class="mk" style="left:-24px;top:-10px">2</span><div class="s-row"><span>Remaining</span><b style="color:var(--accent)">₹ 0 · Fully Paid</b></div></div>
-          <div class="s-row rel"><span class="mk" style="left:-24px;top:-6px">3</span><span></span><span class="s-btn">Pay</span></div>
-        </div>
-      </div>
-    </article>
+  <article class="lesson" id="counter-setup" data-module="Set up the store" data-who="Manager" data-time="5 min">
+    <div class="crumbs"><span class="tag">Set up the store</span><span>Manager · 5 min · once per counter</span></div>
+    <h2>Set up the counter</h2>
+    <p class="goal">A counter is a POS Profile. Tick RFID Counter on it and add its tray reader as an RFID Device.</p>
+    <div class="links"><a href="/app/pos-profile">POS Profiles</a><a href="/app/rfid-device/new">New RFID Device</a><a href="/app/pos-settings">POS Settings</a></div>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/app/pos-profile/Counter 1</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/pos-profile.jpg" alt="POS Profile form with RFID Counter ticked" loading="lazy">
+          <span class="pin" style="--x:870;--y:229">1</span><span class="pin" style="--x:760;--y:284">2</span><span class="pin" style="--x:347;--y:465">3</span><span class="pin" style="--x:895;--y:80">4</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li><b>Warehouse</b>: the stock this counter sells from.</li>
+      <li>Tick <b>RFID Counter</b>. The tray panel appears in POS Next only on such a profile.</li>
+      <li><b>Applicable for Users</b>: add every cashier of this counter. Others will not see the profile.</li>
+      <li><b>Connections → RFID</b> shows this counter's baskets, devices and exceptions.</li>
+    </ol>
+    <h3>POS Profile fields</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Field</th><th>What to fill</th><th>When</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>Company <span class="req">*</span></td><td>Your company</td><td><span class="when once">Once</span></td><td class="ex">Milap Stores</td></tr>
+        <tr><td>Warehouse <span class="req">*</span></td><td>Where the counter's stock is</td><td><span class="when once">Once</span></td><td class="ex">Stores - MS</td></tr>
+        <tr><td>Customer</td><td>Walk-in customer used when none is picked</td><td><span class="when once">Once</span></td><td class="ex">Walk-in Customer</td></tr>
+        <tr><td>RFID Counter</td><td>Tick for counters with a tray reader</td><td><span class="when once">Once</span></td><td class="ex">✓</td></tr>
+        <tr><td>Applicable for Users</td><td>Each cashier</td><td><span class="when each">New staff</span></td><td class="ex">billing1@…</td></tr>
+        <tr><td>Payment Methods</td><td>Every mode accepted; mark one default</td><td><span class="when once">Once</span></td><td class="ex">Cash, UPI, Card</td></tr>
+        <tr><td>Taxes and Charges</td><td>GST template of the store</td><td><span class="when once">Once</span></td><td class="ex">Output GST In-state</td></tr>
+      </tbody>
+    </table></div>
+    <h3>RFID Device fields</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Field</th><th>What to fill</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>Device ID <span class="req">*</span></td><td>A short name you will recognise</td><td class="ex">TRAY-1</td></tr>
+        <tr><td>Device Type <span class="req">*</span></td><td><i>Tray Reader</i> at a counter, <i>Handheld</i> for counting, <i>Exit Gate</i> at the door</td><td class="ex">Tray Reader</td></tr>
+        <tr><td>POS Profile (Counter)</td><td>The counter it sits on (tray readers)</td><td class="ex">Counter 1</td></tr>
+        <tr><td>Warehouse</td><td>For handhelds and gates</td><td class="ex">Stores - MS</td></tr>
+        <tr><td>Active</td><td>Untick when the device is retired</td><td class="ex">✓</td></tr>
+      </tbody>
+    </table></div>
+    <div class="box tip"><b class="t">POS Settings</b>Each POS Profile also has a POS Settings record. Tick <b>Tax Inclusive</b> when shelf prices include GST; otherwise GST sites can refuse the bill with <i>CGST, SGST amount mismatch</i>.</div>
+  </article>
 
-    <article class="lesson">
-      <div class="txt">
-        <h3>Customer returns a garment</h3>
-        <ol class="steps">
-          <li>Press <span class="btn">Return Invoice</span>, find the old bill by number or mobile.</li>
-          <li>Tick the returned garment and its quantity.</li>
-          <li>Choose how to refund (cash/UPI), <span class="btn">Create Return</span>.</li>
-        </ol>
-        <p class="tip">Hand the returned garment to stock staff. They check it and re-tag it at the station before it sells again.</p>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> Create Return Invoice</div>
-          <div class="s-row rel"><span class="mk" style="left:-24px;top:-8px">1</span><span class="s-in">SINV-26-00231 · 98xxxxxx10</span></div>
-          <div class="s-box rel" style="display:grid;gap:4px"><span class="mk" style="left:-24px;top:-10px">2</span>
-            <div class="s-check"><span class="bx">✓</span><span>Shirt Red 40 · Return Qty <b>1</b> of 2</span></div>
-            <div class="s-check"><span class="bx off"></span><span>Kurta White M</span></div>
-          </div>
-          <div class="s-row rel"><span class="mk" style="left:-24px;top:-6px">3</span><span style="padding-left:14px">Cash ₹ 1,190</span><span class="s-btn">Create Return</span></div>
-        </div>
-      </div>
-    </article>
+  <article class="lesson" id="items" data-module="Set up the store" data-who="Manager" data-time="5 min">
+    <div class="crumbs"><span class="tag">Set up the store</span><span>Manager · 5 min · per item</span></div>
+    <h2>Mark the items that carry tags</h2>
+    <p class="goal">Tick one box on the item template and every size and colour follows. Sets (suit = jacket + trouser) also need a Garment Set Definition.</p>
+    <div class="links"><a href="/app/item">Items</a><a href="/app/garment-set-definition">Garment Set Definitions</a><a href="/app/garment-piece">Garment Pieces</a></div>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/app/item/… · Inventory tab</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/item-rfid.jpg" alt="Item form, RFID section with RFID Tracked Garment ticked" loading="lazy">
+          <span class="pin" style="--x:490;--y:68">1</span><span class="pin" style="--x:262;--y:262">2</span><span class="pin" style="--x:262;--y:397">3</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li>Open the item (template) and go to the <b>Inventory</b> tab.</li>
+      <li>Tick <b>RFID Tracked Garment</b>.</li>
+      <li><b>Style Code</b> is optional, for your own grouping. Save.</li>
+    </ol>
+    <h3>Sets</h3>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/app/garment-set-definition/SUIT3</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/garment-set.jpg" alt="Garment Set Definition with Jacket, Trouser and Waistcoat" loading="lazy">
+          <span class="pin" style="--x:270;--y:210">1</span><span class="pin" style="--x:270;--y:247">2</span><span class="pin" style="--x:410;--y:393">3</span><span class="pin" style="--x:745;--y:393">4</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li><b>Active</b>: the definition is in use.</li>
+      <li><b>Allow Mixed Component Sizes</b>: tick only if a 40 jacket may go with a 38 trouser.</li>
+      <li><b>Piece</b>: pick from Garment Piece (Jacket, Trouser…). Create a new piece there once.</li>
+      <li><b>Role Code</b>: short code printed on piece labels, e.g. <code>JKT</code>.</li>
+    </ol>
+    <div class="tbl"><table>
+      <thead><tr><th>Where</th><th>Field</th><th>What to fill</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>Item</td><td>RFID Tracked Garment</td><td>Tick for every item that gets a tag</td><td class="ex">✓</td></tr>
+        <tr><td>Item</td><td>Has Serial No + Serial No Series</td><td>Only for sets, so each suit is one unit</td><td class="ex">SUIT-.######</td></tr>
+        <tr><td>Garment Set Definition</td><td>Sellable Set Item <span class="req">*</span></td><td>The suit template</td><td class="ex">SUIT3</td></tr>
+        <tr><td>Garment Set Definition</td><td>Components <span class="req">*</span></td><td>One row per piece with Pieces = 1</td><td class="ex">Jacket / JKT / 1</td></tr>
+        <tr><td>Garment Piece</td><td>Piece Name, Code <span class="req">*</span></td><td>Create once; the code cannot change later</td><td class="ex">Jacket, JKT</td></tr>
+      </tbody>
+    </table></div>
+    <div class="box tip"><b class="t">Stock you already have</b>Pieces in the warehouse before go-live have no tags. They all appear in the station's <a href="#station">To tag</a> list.</div>
+  </article>
 
-    <article class="lesson">
-      <div class="txt">
-        <h3>Evening: close the shift</h3>
-        <ol class="steps">
-          <li>Press <span class="btn">Close Shift</span>. Today's sales show.</li>
-          <li>Count the drawer cash and type it as <b>Actual Amount</b>. Same for UPI/Card.</li>
-          <li><b>Balanced</b> = all correct. <b>Short</b> = less. <b>Over</b> = more. Then <span class="btn">Close Shift</span> and print the report.</li>
-        </ol>
-      </div>
-      <div class="rel">
-        <div class="screen">
-          <div class="title"><i></i><i></i><i></i> Close POS Shift</div>
-          <div class="s-row rel"><span class="mk" style="left:-24px;top:-8px">1</span><span style="padding-left:14px">Net Sales</span><span class="s-total">₹ 48,920</span></div>
-          <div class="s-box rel" style="display:grid;gap:4px"><span class="mk" style="left:-24px;top:-10px">2</span>
-            <div class="s-row" style="color:var(--muted);font-size:12px"><span>Method</span><span>Expected · Actual</span></div>
-            <div class="s-row"><span>Cash</span><b>21,400 · 21,400</b></div>
-            <div class="s-row"><span>UPI</span><b>27,520 · 27,520</b></div>
-          </div>
-          <div class="s-row rel"><span class="mk" style="left:-24px;top:-6px">3</span><span style="padding-left:14px"><span class="pill ok">✓ Balanced</span></span><span class="s-btn">Close Shift</span></div>
-        </div>
-      </div>
-    </article>
+  <!-- ============ MODULE 3: STOCK ============ -->
+  <article class="lesson" id="receive" data-module="Stock and tagging" data-who="Stock staff" data-time="5 min">
+    <div class="crumbs"><span class="tag">Stock and tagging</span><span>Stock staff · 5 min · every delivery</span></div>
+    <h2>Receive stock</h2>
+    <p class="goal">Enter the supplier's delivery as a Purchase Receipt (or a Purchase Invoice with Update Stock ticked). On submit the selling price is set and the RFID Tags and Print Stickers buttons appear.</p>
+    <div class="links"><a href="/app/purchase-receipt/new">New Purchase Receipt</a><a href="/app/purchase-invoice/new">New Purchase Invoice</a></div>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/app/purchase-receipt/PR-26-00011</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/purchase-receipt.jpg" alt="Submitted Purchase Receipt with Print Stickers and RFID Tags buttons" loading="lazy">
+          <span class="pin" style="--x:282;--y:183">1</span><span class="pin" style="--x:612;--y:460">2</span><span class="pin" style="--x:238;--y:52">3</span><span class="pin" style="--x:658;--y:52">4</span><span class="pin" style="--x:765;--y:52">5</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li><b>Supplier</b> and date of the delivery.</li>
+      <li><b>Accepted Warehouse</b>: where the stock goes.</li>
+      <li>Fill the rows (next picture), then <span class="btn">Submit</span>. The status turns to <i>To Bill</i>.</li>
+      <li><span class="btn">Print Stickers</span> for price labels (<a href="#stickers">next lesson</a>).</li>
+      <li><span class="btn">RFID Tags</span> to put tags on (<a href="#tag-doc">lesson after</a>).</li>
+    </ol>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>Items table with purchase pricing</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/purchase-items.jpg" alt="Purchase Receipt items with Margin, MRP, Offer and Offer Price columns" loading="lazy">
+          <span class="pin" style="--x:657;--y:104">1</span><span class="pin" style="--x:826;--y:104">2</span><span class="pin" style="--x:912;--y:104">3</span><span class="pin" style="--x:1010;--y:104">4</span><span class="pin" style="--x:1084;--y:104">5</span></div></div>
+    </figure>
+    <div class="tbl"><table>
+      <thead><tr><th>#</th><th>Column</th><th>What to fill</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Accepted Qty</td><td>Pieces received in good condition</td><td class="ex">12</td></tr>
+        <tr><td>2</td><td>Rate</td><td>Supplier's price per piece, before GST</td><td class="ex">₹ 980</td></tr>
+        <tr><td>3</td><td>Margin %</td><td>Starts from the default margin; change it per row</td><td class="ex">10%</td></tr>
+        <tr><td>4</td><td>MRP</td><td>Worked out: rate × (1 + GST) × (1 + margin), rounded up to 10. Type it to set your own; the margin follows</td><td class="ex">₹ 1,190</td></tr>
+        <tr><td>5</td><td>Offer % / Offer Price</td><td>Only with offers switched on: discount on MRP; the item sells at the Offer Price</td><td class="ex">10% → ₹ 1,071</td></tr>
+      </tbody>
+    </table></div>
+    <div class="box dont"><b class="t">Purchase Invoice</b>Tick <b>Update Stock</b> when the invoice itself brings the stock in. Without it there are no RFID Tags or Print Stickers buttons.</div>
+  </article>
 
-    <div class="probs" style="margin-top:4px">
-      <p class="dont"><b>Internet down?</b> The RFID counter cannot bill. Wait for it to return.</p>
-      <p class="dont"><b>Never clear the browser data</b> while "Offline Invoices" shows pending bills.</p>
+  <article class="lesson" id="stickers" data-module="Stock and tagging" data-who="Stock staff" data-time="3 min">
+    <div class="crumbs"><span class="tag">Stock and tagging</span><span>Stock staff · 3 min · every delivery</span></div>
+    <h2>Print price stickers</h2>
+    <p class="goal">Print Stickers on a submitted document opens a Sticker Print Job with its items filled in. Type how many to print and print.</p>
+    <div class="links"><a href="/app/sticker-print-job">Sticker Print Jobs</a></div>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/app/sticker-print-job/LBL-00055</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/sticker-job.jpg" alt="Sticker Print Job with label rows" loading="lazy">
+          <span class="pin" style="--x:282;--y:242">1</span><span class="pin" style="--x:617;--y:491">2</span><span class="pin" style="--x:1095;--y:491">3</span><span class="pin" style="--x:902;--y:52">4</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li><b>Price List</b>: where the label price comes from when a row has none.</li>
+      <li><b>Qty</b>: how many stickers for each row. Serial items always get one per piece.</li>
+      <li><b>Barcode</b> and <b>Price</b> fill themselves. Leave the barcode blank to use the item's own.</li>
+      <li><span class="btn">Save</span>, then <span class="btn">Print Stickers</span> and pick the layout: <i>Retail Barcode Label</i> or <i>Item Sticker 80x30</i>.</li>
+    </ol>
+    <div class="box tip"><b class="t">The sticker is the backup</b>When a tag will not read at the counter, the cashier can scan this sticker instead.</div>
+  </article>
+
+  <article class="lesson" id="tag-doc" data-module="Stock and tagging" data-who="Stock staff" data-time="4 min">
+    <div class="crumbs"><span class="tag">Stock and tagging</span><span>Stock staff · 4 min · every delivery</span></div>
+    <h2>Put tags on from the document</h2>
+    <p class="goal">The quickest way: tag the pieces right from the Purchase Receipt, one row at a time. Identical pieces share the row, so any tag can go on any of them.</p>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>Purchase Receipt → RFID Tags</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/rfid-tags-dialog.jpg" alt="RFID Tags dialog with row picker, counter and reader box" loading="lazy">
+          <span class="pin" style="--x:1045;--y:189">1</span><span class="pin" style="--x:275;--y:243">2</span><span class="pin" style="--x:1045;--y:358">3</span><span class="pin" style="--x:1062;--y:458">4</span><span class="pin" style="--x:510;--y:119">5</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li><b>Item row</b>: pick the row. It says how many pieces still need a tag.</li>
+      <li>The counter shows tags read against pieces waiting, here <b>0 / 2</b>.</li>
+      <li>Put a tag on each piece and hold them all on the reader. Each code appears in <b>Tags on the reader</b>; a tag read twice counts once.</li>
+      <li><span class="btn">Tag now</span>. When the count matches, the tags save by themselves. Fewer than the row is fine; tag the rest later.</li>
+      <li>Read tags on the wrong row? <span class="btn">Check stickers / move tags</span> moves them to the right row. No need to cancel.</li>
+    </ol>
+    <div class="grid2">
+      <div class="box do"><b class="t">Green tag</b>Free and good. It goes on this row's pieces.</div>
+      <div class="box dont"><b class="t">Red tag</b>Unknown, damaged, lost or already on another garment. Take it off and use another; the save waits.</div>
     </div>
-  </section>
+  </article>
 
-  <!-- PROBLEMS -->
-  <section class="role" id="problems">
-    <div class="rolehead">
-      <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v4M12 17v.01"/></svg></span>
-      <div><h2>If you see this, do this</h2><p>Most mistakes are fixed without cancelling anything.</p></div>
-    </div>
-    <div class="probs">
-      <div class="prob"><div class="see">Tag … belongs to a garment that is already sold.</div><p class="fix">The old tag was never freed. Remove it at <b>/rfid &rarr; Remove tags</b>, put a new one.</p></div>
-      <div class="prob"><div class="see">… is not a known tag or label.</div><p class="fix">This garment was never tagged. Tag it at <b>Station &rarr; To tag</b>.</p></div>
-      <div class="prob"><div class="see">A set on the tray is incomplete.</div><p class="fix">Put the missing piece on the tray too, or <b>Remove</b> the set.</p></div>
-      <div class="prob"><div class="see">… is in Stores - B, not this counter's warehouse.</div><p class="fix">The garment belongs to another warehouse. Transfer the stock first.</p></div>
-      <div class="prob"><div class="see">Tag … is marked Damaged. Put a new tag on this garment.</div><p class="fix">Manager puts a new tag on from <b>Tag history</b>.</p></div>
-      <div class="prob"><div class="see">No tray panel at all</div><p class="fix">Manager checks: <b>RFID Counter</b> ✓ on the POS Profile, you hold the Billing station, then reload.</p></div>
-      <div class="prob"><div class="see">Only one of many tags read</div><p class="fix">Place the garments a little slower and read again.</p></div>
-      <div class="prob"><div class="see">Need to cancel a purchase</div><p class="fix">Ask a manager. Cancelling takes the stock back out and a warning lists the tags that go free. For a wrong tag, do not cancel: fix the tag instead.</p></div>
-    </div>
-  </section>
-</main>
+  <article class="lesson" id="station" data-module="Stock and tagging" data-who="Stock staff" data-time="4 min">
+    <div class="crumbs"><span class="tag">Stock and tagging</span><span>Stock staff · 4 min</span></div>
+    <h2>Tag at the station</h2>
+    <p class="goal">The station's To tag list shows every piece in stock that still has no tag: old stock, customer returns, anything missed at receiving.</p>
+    <div class="links"><a href="/rfid#mapping">Open Tag garments</a></div>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/rfid · Tag garments</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/station-to-tag.jpg" alt="RFID station To tag list" loading="lazy">
+          <span class="pin" style="--x:361;--y:85">1</span><span class="pin" style="--x:30;--y:157">2</span><span class="pin" style="--x:30;--y:298">3</span><span class="pin" style="--x:1274;--y:31">4</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li>How many pieces wait for a tag in total.</li>
+      <li>Scan the item barcode or garment label to jump to that item.</li>
+      <li>Or tap an item. Its badge says how many of its pieces need tags.</li>
+      <li>The <b>?</b> opens this guide from the station.</li>
+    </ol>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/rfid · Tag garments · item picked</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/station-bulk.jpg" alt="Tagging panel: counter, reader box, Save tags" loading="lazy">
+          <span class="pin" style="--x:420;--y:180">1</span><span class="pin" style="--x:1110;--y:279">2</span><span class="pin" style="--x:420;--y:462">3</span><span class="pin" style="--x:1240;--y:462">4</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li><b>0 of 11 pieces have a tag read</b>: the target for this item.</li>
+      <li>Put all the tags on the reader at once. They appear one by one.</li>
+      <li><span class="btn">Save tags</span> lights up; it also saves by itself when the count is right.</li>
+      <li><span class="btn">Done</span> goes back to the list. <span class="btn">Clear reads</span> starts again.</li>
+    </ol>
+    <div class="box tip"><b class="t">Sets and customer returns</b>These are tagged one garment at a time. The screen asks <i>Scan the tag for Jacket</i>, then Trouser, and moves on by itself. For a return it first lists the pieces: check each came back, then press <span class="btn">All pieces checked - tag again</span>.</div>
+  </article>
 
-<footer>
-  <div class="wrap">Something not covered here? Ask your store manager.</div>
-</footer>
+  <article class="lesson" id="history" data-module="Stock and tagging" data-who="Stock staff" data-time="3 min">
+    <div class="crumbs"><span class="tag">Stock and tagging</span><span>Stock staff, manager · 3 min</span></div>
+    <h2>Tag history and removing tags</h2>
+    <p class="goal">Read any tag to see its full story. Free the tags of sold pieces so they can be used again.</p>
+    <div class="links"><a href="/rfid#history">Open Tag history</a><a href="/rfid#detach">Open Remove tags</a></div>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/rfid · Tag history</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/tag-history.jpg" alt="Tag history for tag TDUZ005" loading="lazy">
+          <span class="pin" style="--x:30;--y:232">1</span><span class="pin" style="--x:140;--y:334">2</span><span class="pin" style="--x:30;--y:453">3</span><span class="pin" style="--x:620;--y:173">4</span><span class="pin" style="--x:440;--y:475">5</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li>Read the tag (or type its code, or scan a garment label).</li>
+      <li>Its status now: <i>Available</i>, <i>Assigned</i>, <i>Damaged</i>, <i>Lost</i>…</li>
+      <li>Manager actions: <span class="btn">Damaged</span>, <span class="btn">Retire</span>, or <i>Found again</i> for a lost tag.</li>
+      <li><b>Garments this tag was on</b>: each use, with the purchase it came in on and the bill it was sold on.</li>
+      <li><b>Everything that happened</b>: every event with time and user.</li>
+    </ol>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/rfid · Remove tags</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/remove-tags.jpg" alt="Remove tags screen" loading="lazy">
+          <span class="pin" style="--x:30;--y:232">1</span><span class="pin" style="--x:1290;--y:113">2</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li>Read the tags of <b>paid</b> pieces. Choose why: <i>Remove - use again</i>, <i>Damaged</i> or <i>Lost</i>.</li>
+      <li><b>Released this session</b> lists what was freed.</li>
+    </ol>
+    <div class="box dont"><b class="t">Unsold pieces</b>A tag on a piece that was not sold is not freed here. Only a store manager can remove it, and only if RFID Settings allows it.</div>
+  </article>
 
+  <article class="lesson" id="count" data-module="Stock and tagging" data-who="Stock staff" data-time="5 min">
+    <div class="crumbs"><span class="tag">Stock and tagging</span><span>Stock staff · 5 min · daily</span></div>
+    <h2>Daily stock count</h2>
+    <p class="goal">Walk the floor with the handheld and scan every tag. The screen ticks off each garment that should be there and shows what is missing. Counting never changes stock.</p>
+    <div class="links"><a href="/rfid#audit">Open Stock count</a><a href="/app/rfid-audit-session">Past counts</a></div>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/rfid · Stock count</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/stock-count.jpg" alt="Stock count in progress with checklist" loading="lazy">
+          <span class="pin" style="--x:30;--y:203">1</span><span class="pin" style="--x:860;--y:265">2</span><span class="pin" style="--x:30;--y:311">3</span><span class="pin" style="--x:30;--y:381">4</span><span class="pin" style="--x:120;--y:425">5</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li>Pick the warehouse, press <span class="btn">Start today's count</span>, then scan every tag (Enter after each, or let the handheld type).</li>
+      <li>Expected, found complete and codes scanned update live; each garment turns green when all its pieces are scanned.</li>
+      <li><span class="btn">Finish count &amp; show result</span>: Matched, Unverified, Unexpected, Unmapped, Sold but Observed, Incomplete Set.</li>
+      <li><span class="btn">Send for review</span>. A different person (Audit Review station) must review it.</li>
+      <li><span class="btn">Discard this count</span> only for a count started by mistake.</li>
+    </ol>
+    <div class="box tip"><b class="t">No count today?</b>With <i>Daily handheld count required</i> on, a Missed Audit exception is raised at 23:00.</div>
+  </article>
+
+  <!-- ============ MODULE 4: COUNTER ============ -->
+  <article class="lesson" id="open-shift" data-module="At the counter" data-who="Cashier" data-time="2 min">
+    <div class="crumbs"><span class="tag">At the counter</span><span>Cashier · 2 min · every morning</span></div>
+    <h2>Open the shift</h2>
+    <p class="goal">Open <a href="/pos"><code>/pos</code></a> and log in with your own user. Before the first bill of the day, open a shift with the cash in the drawer.</p>
+    <div class="links"><a href="/pos">Open POS</a><a href="/app/pos-opening-shift">Past shifts</a></div>
+    <ol class="steps plain">
+      <li>Press <span class="btn">Open Shift</span>.</li>
+      <li><b>Select POS Profile</b>: your counter. Only counters you are listed on appear.</li>
+      <li><b>Opening Balance</b>: the cash in the drawer, per payment method. Leave UPI and Card at 0.</li>
+      <li>Press <span class="btn">Open Shift</span>. The header shows <i>Shift Open</i> with a timer.</li>
+    </ol>
+    <div class="tbl"><table>
+      <thead><tr><th>Field</th><th>What to fill</th><th>When</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>POS Profile</td><td>Your counter</td><td><span class="when each">Every shift</span></td><td class="ex">Counter 1</td></tr>
+        <tr><td>Opening Balance · Cash</td><td>Count the drawer and type it</td><td><span class="when each">Every shift</span></td><td class="ex">₹ 2,000</td></tr>
+        <tr><td>Opening Balance · UPI / Card</td><td>Usually 0</td><td><span class="when each">Every shift</span></td><td class="ex">₹ 0</td></tr>
+      </tbody>
+    </table></div>
+    <div class="box tip"><b class="t">Existing Shift Found</b>Yesterday's shift is still open. <span class="btn">Resume Shift</span> keeps selling on it; <span class="btn">Close &amp; Open New</span> closes it first (see <a href="#close">Close the shift</a>).</div>
+  </article>
+
+  <article class="lesson" id="sale-screen" data-module="At the counter" data-who="Cashier" data-time="3 min">
+    <div class="crumbs"><span class="tag">At the counter</span><span>Cashier · 3 min</span></div>
+    <h2>Know the sale screen</h2>
+    <p class="goal">Items on the left, the bill on the right, the RFID tray box on top of the bill.</p>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/pos · Counter 1</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/pos-sale.jpg" alt="POS Next sale screen with RFID tray box" loading="lazy">
+          <span class="pin" style="--x:1300;--y:101">1</span><span class="pin" style="--x:870;--y:130">2</span><span class="pin" style="--x:885;--y:182">3</span><span class="pin" style="--x:90;--y:163">4</span><span class="pin" style="--x:1110;--y:300">5</span><span class="pin" style="--x:515;--y:37">6</span><span class="pin" style="--x:833;--y:60">7</span><span class="pin" style="--x:30;--y:553">8</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li><b>Tray box</b>: the tray reader types here. Keep the cursor in it while billing.</li>
+      <li><b>Tag unreadable - scanning printed labels</b>: tick to scan stickers instead of tags.</li>
+      <li><b>Customer</b>: type a name or mobile, <b>+</b> to create one. Leave it for walk-in.</li>
+      <li><b>Search</b> items by name or code, or scan a barcode (for items without tags).</li>
+      <li><b>Quick actions</b> when the cart is empty: View Shift, Draft Invoices, Invoice History, Return Invoice, Close Shift, Create Customer.</li>
+      <li><b>Shift Open</b> and how long it has run.</li>
+      <li>Online status, cache, printer and refresh. Press refresh if a new item does not show.</li>
+      <li><b>Settings</b> (manager): this counter's POS Settings.</li>
+    </ol>
+  </article>
+
+  <article class="lesson" id="bill" data-module="At the counter" data-who="Cashier" data-time="4 min">
+    <div class="crumbs"><span class="tag">At the counter</span><span>Cashier · 4 min · every bill</span></div>
+    <h2>Bill on the tray</h2>
+    <p class="goal">Put the customer's garments on the tray. Each piece read goes into the cart; problems show in red under the tray box.</p>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/pos · after a tray read</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/pos-tray.jpg" alt="POS cart filled from tray reads, one refused tag in red" loading="lazy">
+          <span class="pin" style="--x:1300;--y:101">1</span><span class="pin" style="--x:870;--y:154">2</span><span class="pin" style="--x:870;--y:380">3</span><span class="pin" style="--x:870;--y:470">4</span><span class="pin" style="--x:870;--y:566">5</span><span class="pin" style="--x:1330;--y:540">6</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li>All garments on the tray. The reader fills the box by itself.</li>
+      <li><b>Red line</b> = this tag cannot be sold (here: a tag not on any garment). Put that piece aside and tell the manager.</li>
+      <li>Read pieces land in the cart with the right quantity. <b>×</b> removes a line.</li>
+      <li>Total quantity, subtotal, tax and <b>Grand Total</b>.</li>
+      <li><span class="btn">Checkout</span> to take payment.</li>
+      <li><span class="btn">Hold</span> parks the bill as a draft if the customer steps away.</li>
+    </ol>
+    <div class="box tip"><b class="t">Sets</b>A suit with a missing piece stays in an orange box above the cart, each piece marked ✓ or ✕. Payment waits until the missing piece is read, or press <b>Remove</b>.</div>
+    <div class="box dont"><b class="t">Offline</b>An RFID counter cannot finish a bill without internet. Wait for the connection.</div>
+  </article>
+
+  <article class="lesson" id="handpick" data-module="At the counter" data-who="Cashier" data-time="2 min">
+    <div class="crumbs"><span class="tag">At the counter</span><span>Cashier · 2 min</span></div>
+    <h2>Clicking an item by hand</h2>
+    <p class="goal">Tagged pieces must be read on the tray. If you click a tagged item in the item list, the POS asks first, or refuses.</p>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/pos · item clicked by hand</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/pos-handpick.jpg" alt="Sell without reading the RFID tag? dialog" loading="lazy">
+          <span class="pin" style="--x:500;--y:262">1</span><span class="pin" style="--x:596;--y:430">2</span><span class="pin" style="--x:768;--y:430">3</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li>The POS says how many pieces of this item have a tag and how many do not.</li>
+      <li><span class="btn">Scan the tag</span>: the piece has a tag. Put it on the tray instead.</li>
+      <li><span class="btn">Piece has no tag - add</span>: only for a piece that truly has no tag. You can never add more than the untagged pieces in stock.</li>
+    </ol>
+    <div class="box dont"><b class="t">All pieces tagged</b>If every piece of the item in stock has a tag, clicking it is refused: <i>Put it on the RFID tray instead of picking it by hand.</i></div>
+  </article>
+
+  <article class="lesson" id="pay" data-module="At the counter" data-who="Cashier" data-time="3 min">
+    <div class="crumbs"><span class="tag">At the counter</span><span>Cashier · 3 min · every bill</span></div>
+    <h2>Take payment</h2>
+    <p class="goal">Pick how the customer pays, make Remaining zero, complete the payment and print.</p>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/pos · Complete Payment</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/pos-payment.jpg" alt="Complete Payment dialog with methods, quick amounts, numpad" loading="lazy">
+          <span class="pin" style="--x:560;--y:157">1</span><span class="pin" style="--x:560;--y:211">2</span><span class="pin" style="--x:560;--y:380">3</span><span class="pin" style="--x:352;--y:528">4</span><span class="pin" style="--x:560;--y:520">5</span><span class="pin" style="--x:120;--y:189">6</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li><b>Payment method</b>: UPI, Card or Cash. Split across two if needed.</li>
+      <li><b>Quick amounts</b>: tap the exact bill or a round note.</li>
+      <li>Or type the amount on the numpad and press <span class="btn">Add</span>.</li>
+      <li><b>Remaining</b> must reach ₹ 0. Extra cash shows as change to give back.</li>
+      <li><span class="btn">Complete Payment</span>, then <span class="btn">Print Invoice</span>. The tags are freed by themselves.</li>
+      <li><b>Offers</b> shows discounts that apply; <b>Coupon</b> takes a code.</li>
+    </ol>
+    <div class="box tip"><b class="t">Card and UPI</b>Cannot be more than the bill. Only cash can give change.</div>
+  </article>
+
+  <article class="lesson" id="returns" data-module="At the counter" data-who="Cashier" data-time="3 min">
+    <div class="crumbs"><span class="tag">At the counter</span><span>Cashier · 3 min</span></div>
+    <h2>Customer returns</h2>
+    <p class="goal">Find the original bill, tick what came back, choose how to refund.</p>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/pos · Create Return Invoice</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/pos-return.jpg" alt="Create Return Invoice: invoice search and list" loading="lazy">
+          <span class="pin" style="--x:175;--y:162">1</span><span class="pin" style="--x:175;--y:230">2</span><span class="pin" style="--x:470;--y:462">3</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li>Search by bill number, customer or mobile.</li>
+      <li>Tap the bill. Then tick the pieces and set <b>Return Qty</b>.</li>
+      <li>A bill already returned shows <i>Credit Note Issued</i>. Choose the refund method, add a reason, <span class="btn">Create Return</span>.</li>
+    </ol>
+    <div class="box do"><b class="t">After the return</b>Hand the garment to stock staff. It shows in the station's <a href="#station">To tag</a> list and is checked and re-tagged before it sells again.</div>
+  </article>
+
+  <article class="lesson" id="close" data-module="At the counter" data-who="Cashier" data-time="4 min">
+    <div class="crumbs"><span class="tag">At the counter</span><span>Cashier · 4 min · every evening</span></div>
+    <h2>Close the shift</h2>
+    <p class="goal">Check the day's sales, count the money per payment method, close.</p>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/pos · Close POS Shift</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/close-shift.jpg" alt="Close POS Shift summary tiles and invoice list" loading="lazy">
+          <span class="pin" style="--x:262;--y:226">1</span><span class="pin" style="--x:262;--y:371">2</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li>Gross sales, returns, net sales and tax for the shift.</li>
+      <li>Every bill and return of the shift.</li>
+    </ol>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/pos · Payment Reconciliation</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/close-reconcile.jpg" alt="Payment reconciliation per method with actual amount fields" loading="lazy">
+          <span class="pin" style="--x:800;--y:198">1</span><span class="pin" style="--x:950;--y:111">2</span><span class="pin" style="--x:940;--y:319">3</span><span class="pin" style="--x:290;--y:490">4</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li><b>Actual Amount</b>: count and type what you really have for each method.</li>
+      <li><b>Balanced</b>: actual equals expected.</li>
+      <li><b>Short</b> or <b>Over</b>: the difference. Recount before closing.</li>
+      <li>Cash short or over is shown in money. Then <span class="btn">Close Shift</span> and <span class="btn">Print EOD Report</span>.</li>
+    </ol>
+    <div class="box dont"><b class="t">Do not leave it open</b>Close every shift at night. A shift left open mixes two days of sales.</div>
+  </article>
+
+  <!-- ============ MODULE 5: PROBLEMS ============ -->
+  <article class="lesson" id="messages" data-module="When things go wrong" data-who="Everyone" data-time="3 min">
+    <div class="crumbs"><span class="tag">When things go wrong</span><span>Everyone · 3 min</span></div>
+    <h2>Counter messages and what to do</h2>
+    <p class="goal">Red lines under the tray box explain why a tag was refused.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>You see</th><th>Means</th><th>Do this</th></tr></thead>
+      <tbody>
+        <tr><td>… is not a known tag or label.</td><td>Code never used</td><td>Tag the garment at the <a href="#station">station</a></td></tr>
+        <tr><td>Tag … is not on any garment.</td><td>Free tag, no garment</td><td>Tag the garment first</td></tr>
+        <tr><td>Tag … belongs to a garment that is already sold.</td><td>Old tag never freed</td><td><a href="#history">Remove tags</a>, put on a new one</td></tr>
+        <tr><td>Tag … is marked Damaged / Lost.</td><td>Tag out of use</td><td>Manager puts a new tag on (Tag history)</td></tr>
+        <tr><td>… is in Stores - B, not this counter's warehouse.</td><td>Stock belongs elsewhere</td><td>Transfer the stock first</td></tr>
+        <tr><td>… is being billed on another counter.</td><td>On another tray</td><td>Finish or clear it there</td></tr>
+        <tr><td>A set on the tray is incomplete.</td><td>Missing piece</td><td>Read the piece or Remove the set</td></tr>
+        <tr><td>RFID counter needs a connection…</td><td>Offline</td><td>Wait for internet</td></tr>
+        <tr><td>CGST, SGST amount mismatch</td><td>Tax setting</td><td>Manager ticks Tax Inclusive in POS Settings</td></tr>
+      </tbody>
+    </table></div>
+  </article>
+
+  <article class="lesson" id="exceptions" data-module="When things go wrong" data-who="Manager" data-time="3 min">
+    <div class="crumbs"><span class="tag">When things go wrong</span><span>Manager · 3 min · daily</span></div>
+    <h2>Check the exceptions list</h2>
+    <p class="goal">Everything that went wrong anywhere is logged as an RFID Exception. Look at it every day and close what you have dealt with.</p>
+    <div class="links"><a href="/app/rfid-exception">Open RFID Exceptions</a></div>
+    <figure class="shot">
+      <div class="frame"><div class="chrome"><i></i><i></i><i></i><span>/app/rfid-exception</span></div>
+        <div class="pic"><img src="/assets/rfid_retail/images/guide/exceptions.jpg" alt="RFID Exception list with event and severity" loading="lazy">
+          <span class="pin" style="--x:490;--y:138">1</span><span class="pin" style="--x:690;--y:188">2</span><span class="pin" style="--x:895;--y:188">3</span></div></div>
+    </figure>
+    <ol class="steps">
+      <li>Filter by <b>Event</b>, <b>Severity</b> or <b>Status</b>. Open items only by default.</li>
+      <li><b>Event</b>: what happened.</li>
+      <li><b>Severity</b>: deal with High first.</li>
+    </ol>
+    <div class="tbl"><table>
+      <thead><tr><th>Event</th><th>What to do</th></tr></thead>
+      <tbody>
+        <tr><td>Unmapped Tag</td><td>A tag was read that is on no garment. Find it and tag the garment.</td></tr>
+        <tr><td>Barcode Fallback</td><td>A sticker was scanned instead of the tag. Check the tag on that piece.</td></tr>
+        <tr><td>Exit Alert</td><td>An unsold garment passed the gate. Check at once.</td></tr>
+        <tr><td>Audit Shortage / Unexpected</td><td>From the stock count: find the missing or extra pieces.</td></tr>
+        <tr><td>Missed Audit</td><td>No stock count that day.</td></tr>
+        <tr><td>Tag Removed / Tag Replaced / Tag Lost</td><td>Record of tag changes. Close after checking.</td></tr>
+        <tr><td>Untagged Stock</td><td>After a cancel the warehouse has more tags than stock. Find those tags in the next count.</td></tr>
+        <tr><td>Manual Override</td><td>A manager approved a rule break. Check it was right.</td></tr>
+      </tbody>
+    </table></div>
+  </article>
+
+  <article class="lesson" id="fixes" data-module="When things go wrong" data-who="Manager" data-time="3 min">
+    <div class="crumbs"><span class="tag">When things go wrong</span><span>Manager · 3 min</span></div>
+    <h2>Fix mistakes without cancelling</h2>
+    <p class="goal">Most mistakes are about one tag. Fix the tag, not the document.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Problem</th><th>Fix</th><th>Where</th></tr></thead>
+      <tbody>
+        <tr><td>Tags read on the wrong row</td><td>Check stickers / move tags</td><td>RFID Tags dialog on the document</td></tr>
+        <tr><td>Tag torn or will not read</td><td>Damaged, then put on a new tag</td><td><a href="/rfid#history">Tag history</a></td></tr>
+        <tr><td>Tag on an unsold piece must come off</td><td>Remove tags (store manager)</td><td><a href="/rfid#detach">Remove tags</a></td></tr>
+        <tr><td>Sold tag still on a garment</td><td>Remove - use again</td><td><a href="/rfid#detach">Remove tags</a></td></tr>
+        <tr><td>No tray panel in POS</td><td>RFID Counter ticked, cashier has Billing station, RFID enabled, reload</td><td><a href="#counter-setup">Counter setup</a></td></tr>
+        <tr><td>Only one of many tags read</td><td>Place garments slower and read again</td><td>Tray</td></tr>
+      </tbody>
+    </table></div>
+    <div class="box dont"><b class="t">Cancelling a Purchase Receipt</b>Takes the stock back out and frees every tag it put on garments. A warning lists them; <span class="btn">Keep document</span> stops the cancel. Only a manager should cancel, and only when the document itself is wrong.</div>
+  </article>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  var lessons = Array.prototype.slice.call(document.querySelectorAll("article.lesson"));
+  var nav = document.getElementById("nav");
+  var KEY = "store-guide-done";
+  var done = {};
+  try { done = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { done = {}; }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(done)); } catch (e) {} }
+
+  // sidebar from the lessons
+  var modules = [];
+  lessons.forEach(function (l) {
+    var m = l.dataset.module;
+    var mod = modules.filter(function (x) { return x.name === m; })[0];
+    if (!mod) { mod = { name: m, who: l.dataset.who, items: [] }; modules.push(mod); }
+    mod.items.push(l);
+  });
+  modules.forEach(function (mod, mi) {
+    var wrap = document.createElement("div"); wrap.className = "mod";
+    var h = document.createElement("div"); h.className = "mod-h";
+    h.innerHTML = "<span>" + (mi + 1) + ". " + mod.name + "</span>";
+    wrap.appendChild(h);
+    mod.items.forEach(function (l) {
+      var a = document.createElement("a");
+      a.href = "#" + l.id; a.dataset.id = l.id;
+      a.innerHTML = '<span class="dot"></span><span>' + l.querySelector("h2").textContent + "</span>";
+      a.dataset.text = (l.textContent || "").toLowerCase();
+      wrap.appendChild(a);
+    });
+    nav.appendChild(wrap);
+  });
+  var links = Array.prototype.slice.call(nav.querySelectorAll("a"));
+
+  // prev / next / mark done on every lesson
+  lessons.forEach(function (l, i) {
+    var foot = document.createElement("div"); foot.className = "foot";
+    var prev = lessons[i - 1], next = lessons[i + 1];
+    foot.innerHTML =
+      (prev ? '<a class="nx prev" href="#' + prev.id + '">← ' + prev.querySelector("h2").textContent + "</a>" : "<span></span>") +
+      '<span class="gap"></span><button type="button" class="mark" data-id="' + l.id + '"></button>' +
+      (next ? '<a class="nx next" href="#' + next.id + '">' + next.querySelector("h2").textContent + " →</a>" : "");
+    l.appendChild(foot);
+  });
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("button.mark");
+    if (!b) return;
+    var id = b.dataset.id;
+    if (done[id]) delete done[id]; else done[id] = 1;
+    save(); paint();
+  });
+
+  function paint() {
+    var n = 0;
+    links.forEach(function (a) { var d = !!done[a.dataset.id]; a.classList.toggle("done", d); if (d) n++; });
+    document.querySelectorAll("button.mark").forEach(function (b) {
+      var d = !!done[b.dataset.id];
+      b.classList.toggle("done", d);
+      b.textContent = d ? "✓ Completed" : "Mark as completed";
+    });
+    document.getElementById("prog-txt").textContent = n + " of " + lessons.length + " lessons";
+    document.getElementById("prog-bar").style.width = (lessons.length ? (n / lessons.length) * 100 : 0) + "%";
+  }
+
+  var side = document.getElementById("side"), menuBtn = document.getElementById("menu-btn");
+  menuBtn.addEventListener("click", function () {
+    var open = side.classList.toggle("open");
+    menuBtn.setAttribute("aria-expanded", String(open));
+  });
+
+  function show() {
+    var id = (location.hash || "").slice(1);
+    var target = lessons.filter(function (l) { return l.id === id; })[0] || lessons[0];
+    lessons.forEach(function (l) { l.classList.toggle("on", l === target); });
+    links.forEach(function (a) { a.classList.toggle("on", a.dataset.id === target.id); });
+    document.title = target.querySelector("h2").textContent + " · Store Guide";
+    side.classList.remove("open"); menuBtn.setAttribute("aria-expanded", "false");
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener("hashchange", show);
+
+  document.getElementById("search").addEventListener("input", function (e) {
+    var q = e.target.value.trim().toLowerCase();
+    links.forEach(function (a) { a.style.display = !q || a.dataset.text.indexOf(q) >= 0 ? "" : "none"; });
+  });
+
+  paint(); show();
+})();
+</script>
 </body>
 </html>
