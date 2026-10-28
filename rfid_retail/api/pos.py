@@ -9,9 +9,10 @@ import json
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 from frappe.utils import cint, flt, now_datetime
 
-from rfid_retail import rfid
+from rfid_retail import rfid, unread
 from rfid_retail.settings import get as setting, has_station, require_station
 
 def _load(value):
@@ -46,6 +47,9 @@ def counter_config(pos_profile):
 		"allow_label_fallback": cint(setting("allow_label_fallback")),
 		"block_untracked_items": cint(setting("block_untracked_items")),
 		"hand_pick_check": 1 if hand_pick_check() else 0,
+		"unread_sale": 1 if unread.allowed() else 0,
+		"unread_needs_manager": 1 if unread.needs_manager() else 0,
+		"unread_reasons": unread.REASONS,
 		"device": frappe.db.get_value("RFID Device",
 			{"pos_profile": pos_profile, "device_type": "Tray Reader", "is_active": 1}, "name"),
 	}
@@ -290,7 +294,51 @@ def basket_view(basket):
 		ln["rate"] = rates.get(ln["serial_no"] or ln["item_code"], 0)
 	return {"basket": doc.name, "status": doc.status, "pos_profile": doc.pos_profile, "customer": doc.customer,
 		"sales_invoice": doc.sales_invoice, "lines": lines, "read_count": len(doc.reads),
-		"blocked": any(not ln["complete"] for ln in lines), "totals": totals}
+		"blocked": any(not ln["complete"] for ln in lines), "totals": totals, "unread": _unread_map(doc)}
+
+
+def _unread_map(basket):
+	out = {}
+	for r in basket.get("unread") or []:
+		out[r.item_code] = out.get(r.item_code, 0) + cint(r.qty)
+	return out
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=30, seconds=600)
+def approve_unread(basket, item_code, reason, qty=1, note=None, manager=None, password=None):
+	"""A piece whose tag will not read (damaged or missing), while every piece of the item in stock
+	carries a tag: allow it on this bill, picked by hand. Approved by the cashier when they hold
+	Manager Override (or approval is switched off), else by a manager signing in on the counter.
+	The tag left behind becomes an RFID Unread Sale when the bill is paid."""
+	require_station("Billing")
+	if not unread.allowed():
+		frappe.throw(_("Selling a piece whose tag will not read is switched off (RFID Settings)."))
+	doc = _basket(basket, for_update=True)
+	if doc.status != "Open":
+		frappe.throw(_("Basket {0} is {1}.").format(doc.name, doc.status))
+	if not rfid.is_item_level(item_code):
+		frappe.throw(_("{0} is not an RFID item without serial numbers. Pick the serial number instead.").format(item_code))
+	if reason not in unread.REASONS:
+		frappe.throw(_("Choose why the tag cannot be read."))
+	qty = cint(qty)
+	if qty < 1:
+		frappe.throw(_("Quantity must be at least 1."))
+	warehouse = frappe.db.get_value("POS Profile", doc.pos_profile, "warehouse")
+	# tags of the item in stock that are not on this bill's tray, nor already approved, nor already
+	# standing for an earlier unread sale
+	on_tray = sum(1 for r in doc.reads if r.item_code == item_code and not r.serial_no)
+	actual = cint(flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty")))
+	tagged = min(rfid.count_item_tags(item_code, warehouse) - unread.outstanding(item_code, warehouse), actual)
+	room = tagged - on_tray - _unread_map(doc).get(item_code, 0)
+	if qty > room:
+		frappe.throw(_("Only {0} more tagged piece(s) of {1} are in stock in {2}.").format(max(room, 0), item_code,
+			warehouse))
+	approver = unread.check_approver(manager, password)
+	doc.append("unread", {"item_code": item_code, "qty": qty, "reason": reason, "note": (note or "").strip() or None,
+		"approved_by": approver, "approved_at": now_datetime()})
+	doc.save(ignore_permissions=True)
+	return {"item_code": item_code, "approved_by": approver, "unread": _unread_map(doc)}
 
 
 def _build_invoice(basket, lines, customer=None):

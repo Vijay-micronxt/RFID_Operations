@@ -296,6 +296,17 @@ must also hold the Billing station. On any other profile, POS Next works as norm
 6. **Picking by hand** from the item grid or by item barcode:
    - If *every* piece of that item in stock has a tag, it is **blocked**: "Every piece of ... in
      stock has an RFID tag. Put it on the RFID tray instead of picking it by hand."
+   - **Tag will not read** (tag damaged or missing, and the customer still takes the piece): with
+     *Allow sale when the tag will not read* on, the block opens a **Tag will not read?** dialog
+     instead. Choose **Tag Damaged** or **Tag Missing**, add a note if useful, and press **Sell
+     without tag**. A cashier without the Manager Override station needs a manager to type their
+     login and password in the same dialog (*Manager approves unread-tag sales*). The approval is
+     kept on the bill's RFID basket; the server refuses more hand-picked pieces than were approved.
+     Raising the quantity in the cart later asks again at **Checkout**.
+
+     After payment the item has one tag more than stock: nobody knows which tag left with the
+     garment. An **RFID Unread Sale** (desk list) keeps it open with the invoice, reason and
+     approver. A stock count of that item settles it (section 9).
    - If the item has both tagged and untagged pieces in stock, the cashier is asked **Sell
      without reading the RFID tag?** with two choices: **Scan the tag** or **Piece has no tag -
      add**. The cart never takes more hand-picked pieces than there are untagged pieces.
@@ -373,11 +384,23 @@ There is no need to cancel a document for a wrong tag:
 Open the **Stock count** tab at `/rfid`.
 
 1. Pick the **Warehouse** (the one with the most RFID stock is first) and, if used, the
-   **Handheld**. Press **Start today's count**.
-2. **Scan every tag** in the warehouse (Enter after each, or let the handheld type them). Each
-   scan saves straight away and ticks the piece on the checklist.
-3. When everything is scanned, press **Finish count & show result**.
-4. Press **Send for review**. A different user (Audit Review station) must review it.
+   **Handheld**.
+2. **What to count**: **Whole warehouse**, or **Some items only**. For some items, search and pick
+   one or more items, a template (counts all its variants) or an item group (with its
+   sub-groups). Only their tags are expected; tags of other items read on the way are ignored.
+   Press **Start count**.
+3. **Scan every tag** in the warehouse, or of the chosen items (Enter after each, or let the
+   handheld type them). Each scan saves straight away and ticks the piece on the checklist.
+4. When everything is scanned, press **Finish count & show result**. **Tags not read, by item**
+   lists every tag that was expected but not read, with what to do about it:
+   - **Sold without tag read**: shown when that item has an open RFID Unread Sale. The tag is
+     closed against that sale's invoice (marked Lost, since it left with the garment) and the
+     Unread Sale is settled. When the tags not read are no more than the pieces sold unread, one
+     button settles them all.
+   - **Piece is here, tag dead**: the piece was found on the shelf but its tag does not read. The
+     tag is marked Damaged and the piece goes back to the *To tag* list for a new tag.
+   - Anything else stays for the manager's review (Confirmed Missing, Tag Lost, ...).
+5. Press **Send for review**. A different user (Audit Review station) must review it.
    **Discard this count** throws away a count started by mistake.
 
 Nothing in stock changes during a count. The result sorts every piece into:
@@ -420,6 +443,8 @@ Purchase Receipt, Purchase Invoice and Stock Entry pages (dashboard / Connection
 | Accept printed labels when a tag cannot be read | on | Labels count as a read; each use is logged as Barcode Fallback. |
 | Block stock items that are not RFID tracked | off | On: nothing can be sold unless it carries an RFID identity. |
 | Check RFID items picked by hand against untagged stock | on | The hand-pick warning / block in section 7. |
+| Allow sale when the tag will not read | on | Fully tagged item, damaged or missing tag: sell by hand with a reason; an RFID Unread Sale waits for the next count. |
+| Manager approves unread-tag sales | on | A user without Manager Override needs a manager's login and password at the counter. |
 | After A Sale | Free the tag at once | Or: keep it on the garment until it is read at the detach station. |
 | Allow removing tags from unsold items | off | Lets the Tag Removal station take tags off unsold stock. |
 | Mark a device offline after (minutes) | 15 | Silent readers go Offline (checked every 5 minutes). |
@@ -441,6 +466,7 @@ and works with RFID off.
 | A tag code looks short (missing the first letters) | The reader dropped characters. Read the tag again. |
 | RFID Tags button missing | The document must be submitted. A Purchase Invoice must have Update Stock ticked. The item must be RFID Tracked Garment. |
 | "No row to tag here" | Tick RFID Tracked Garment on the item. Sets are tagged at the station. |
-| Hand-picked item blocked at the counter | Every piece in stock has a tag: put it on the tray. |
+| Hand-picked item blocked at the counter | Every piece in stock has a tag: put it on the tray. If its tag is damaged or missing, use **Sell without tag** (needs *Allow sale when the tag will not read*). |
+| Item has more tags than stock after a sale | A piece was sold without its tag read. See RFID Unread Sale; count that item to settle it. |
 | A sold garment raises an exit alert | The bill was not submitted, or the tag was read before payment. Check the invoice. |
 | Count shows Unexpected pieces | They belong to another warehouse: transfer them or move the stock. |

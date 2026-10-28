@@ -49,7 +49,7 @@ def before_submit(doc, method=None):
 			if not rfid.is_rfid_item(row.item_code) and frappe.get_cached_value("Item", row.item_code, "is_stock_item"):
 				frappe.throw(_("Row {0}: {1} has no RFID identity. Only RFID-tracked items can be sold here.").format(
 					row.idx, row.item_code))
-	basket_reads, basket_tags = {}, {}
+	basket_reads, basket_tags, approved = {}, {}, {}
 	if doc.get("custom_rfid_basket"):
 		basket = frappe.get_doc("RFID Basket", doc.custom_rfid_basket)
 		if basket.status == "Cancelled":
@@ -61,12 +61,15 @@ def before_submit(doc, method=None):
 				basket_reads.setdefault(read.serial_no, set()).add(read.component or read.serial_no)
 			elif read.item_code:
 				basket_tags.setdefault(read.item_code, []).append(read.epc)
+		approved = _approved_unread(basket)
 
 	seen = set()
-	_check_untagged_stock(doc, basket_tags)
+	_check_untagged_stock(doc, basket_tags, approved)
+	approved_left = dict(approved)
 	for row in rfid_rows(doc):
 		if not rfid.has_serial(row.item_code):
-			row.custom_rfid_manifest = json.dumps(_item_rows_tags(doc, row, basket_tags), separators=(",", ":"))
+			row.custom_rfid_manifest = json.dumps(_item_rows_tags(doc, row, basket_tags, approved_left),
+				separators=(",", ":"))
 			continue
 		serials = get_row_serials(row)
 		if len(serials) != abs(cint(row.qty)):
@@ -81,10 +84,22 @@ def before_submit(doc, method=None):
 		row.custom_rfid_manifest = json.dumps(manifest, separators=(",", ":"))
 
 
-def _check_untagged_stock(doc, basket_tags):
+def _approved_unread(basket):
+	"""Pieces per item the counter approved to sell although their tag will not read."""
+	from rfid_retail import unread
+
+	if not unread.allowed():
+		return {}
+	out = {}
+	for r in basket.get("unread") or []:
+		out[r.item_code] = out.get(r.item_code, 0) + cint(r.qty)
+	return out
+
+
+def _check_untagged_stock(doc, basket_tags, approved=None):
 	"""Units billed without a tag read must be units that have no tag. Selling more than the
-	untagged stock means a tagged piece went out without its tag being read. RFID Settings >
-	Check RFID items picked by hand."""
+	untagged stock means a tagged piece went out without its tag being read, unless the counter
+	approved it as a piece whose tag will not read. RFID Settings > Check RFID items picked by hand."""
 	from rfid_retail.settings import hand_pick_check
 
 	if not hand_pick_check():
@@ -100,7 +115,7 @@ def _check_untagged_stock(doc, basket_tags):
 		if short <= 0:
 			continue
 		free = rfid.untagged_qty(item_code, warehouse)
-		if short > free:
+		if short > free + (approved or {}).get(item_code, 0):
 			rfid.log_exception_on_failure("Manual Override",
 				_("{0} x {1} billed by hand on {2} but only {3} piece(s) in {4} have no tag.").format(
 					short, item_code, doc.get("pos_profile") or _("desk"), free, warehouse),
@@ -111,7 +126,7 @@ def _check_untagged_stock(doc, basket_tags):
 				title=_("Read the RFID tag"))
 
 
-def _item_rows_tags(doc, row, basket_tags):
+def _item_rows_tags(doc, row, basket_tags, approved_left=None):
 	"""Tags read on the counter for this row of a non-serial item. Each tag counts once on the invoice."""
 	qty = abs(cint(flt(row.get("stock_qty") or row.qty)))
 	pool = basket_tags.get(row.item_code, [])
@@ -131,7 +146,10 @@ def _item_rows_tags(doc, row, basket_tags):
 	short = qty - len(tags)
 	if short > 0:
 		where = doc.get("pos_profile") or _("desk")
-		if cint(setting("require_scan_for_sale")) and not cint(setting("allow_label_fallback")):
+		approved_left = approved_left if approved_left is not None else {}
+		excused = min(short, approved_left.get(row.item_code, 0))
+		approved_left[row.item_code] = approved_left.get(row.item_code, 0) - excused
+		if short > excused and cint(setting("require_scan_for_sale")) and not cint(setting("allow_label_fallback")):
 			rfid.log_exception_on_failure("Manual Override",
 				_("{0} x {1} billed without RFID reads ({2}).").format(short, row.item_code, where),
 				severity="Medium", pos_profile=doc.get("pos_profile"), reference_doctype=doc.doctype,
@@ -203,11 +221,33 @@ def on_submit(doc, method=None):
 		else:
 			for entry in _manifest(row):
 				_sell_tag(doc, row, entry["tag"])
+	_record_untagged_sales(doc)
+	if doc.get("custom_rfid_basket"):
+		frappe.db.set_value("RFID Basket", doc.custom_rfid_basket, {"status": "Billed", "sales_invoice": doc.name, "customer": doc.customer})
+
+
+def _record_untagged_sales(doc):
+	from rfid_retail import unread
+
+	untagged = {}
 	for item_code, short, warehouse in doc.flags.rfid_untagged_sales or []:
+		untagged[(item_code, warehouse)] = untagged.get((item_code, warehouse), 0) + short
+	approvals = []
+	if untagged and doc.get("custom_rfid_basket"):
+		approvals = frappe.get_doc("RFID Basket", doc.custom_rfid_basket).get("unread") or []
+	for (item_code, warehouse), short in untagged.items():
 		# Stock is already reduced here: more tags than stock means tagged pieces went out unread.
 		extra = rfid.count_item_tags(item_code, warehouse) - cint(flt(frappe.db.get_value("Bin",
 			{"item_code": item_code, "warehouse": warehouse}, "actual_qty")))
-		if extra > 0:
+		# tags already waiting on earlier unread sales are not counted twice
+		pending = min(short, extra - unread.outstanding(item_code, warehouse))
+		urs = pending > 0 and unread.record(doc, item_code, warehouse, pending,
+			[a for a in approvals if a.item_code == item_code])
+		if urs:
+			message = _("{0} x {1} sold on {2} without reading their tags ({3}). {4} tag(s) of {1} in {5} stand for "
+				"pieces that are gone ({6}); a stock count of {1} settles them.").format(
+				short, item_code, doc.name, urs.reason, pending, warehouse, urs.name)
+		elif extra > 0:
 			message = _("{0} x {1} sold on {2} without reading their tags. {3} tag(s) of {1} in {4} now stand for "
 				"stock that is gone; remove those tags or mark them lost after the stock count.").format(
 				short, item_code, doc.name, extra, warehouse)
@@ -216,8 +256,6 @@ def on_submit(doc, method=None):
 				short, item_code, doc.name, warehouse)
 		rfid.log_exception("Barcode Fallback", message, severity="Medium" if extra > 0 else "Low",
 			pos_profile=doc.get("pos_profile"), reference_doctype=doc.doctype, reference_name=doc.name)
-	if doc.get("custom_rfid_basket"):
-		frappe.db.set_value("RFID Basket", doc.custom_rfid_basket, {"status": "Billed", "sales_invoice": doc.name, "customer": doc.customer})
 
 
 def _manifest(row):
@@ -350,6 +388,9 @@ def on_cancel(doc, method=None):
 			reference_name=doc.name, reason=_("Sale cancelled"))
 	# Tags freed at the sale: back on the same unit if nobody reused them, else flag for a new tag.
 	restore_tags(doc, ("Sold",))
+	from rfid_retail import unread
+
+	unread.on_invoice_cancel(doc)
 	for row in rfid_rows(doc):
 		for serial_no in get_row_serials(row) if rfid.has_serial(row.item_code) else []:
 			rfid.refresh_serial_readiness(serial_no)

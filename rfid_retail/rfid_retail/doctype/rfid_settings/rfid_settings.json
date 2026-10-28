@@ -13,6 +13,8 @@
   "allow_label_fallback",
   "block_untracked_items",
   "check_hand_picked_items",
+  "allow_unread_tag_sale",
+  "unread_sale_needs_manager",
   "cb_sale",
   "tag_release_mode",
   "allow_unsold_tag_removal",
@@ -115,6 +117,22 @@
    "fieldname": "check_hand_picked_items",
    "fieldtype": "Check",
    "label": "Check RFID items picked by hand against untagged stock"
+  },
+  {
+   "default": "1",
+   "depends_on": "check_hand_picked_items",
+   "fieldname": "allow_unread_tag_sale",
+   "fieldtype": "Check",
+   "label": "Allow sale when the tag will not read",
+   "description": "Every piece in stock carries a tag but this one's tag is damaged or missing: the cashier can still sell it by hand, with a reason. The tag left behind is kept as an Unread Sale until a stock count finds it."
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.check_hand_picked_items && doc.allow_unread_tag_sale",
+   "fieldname": "unread_sale_needs_manager",
+   "fieldtype": "Check",
+   "label": "Manager approves unread-tag sales",
+   "description": "A user who does not hold the Manager Override station needs a manager's login and password at the counter."
   },
   {
    "fieldname": "cb_sale",
@@ -462,7 +480,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-24 13:00:00.000000",
+ "modified": "2026-10-28 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Settings",

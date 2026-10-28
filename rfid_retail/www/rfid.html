@@ -208,10 +208,25 @@
 			<label class="field" id="a-device-field" hidden>Handheld
 				<select id="a-device" class="device-select" data-type="Handheld"></select>
 			</label>
-			<button class="btn primary wide" id="a-begin"><span class="ms">play_arrow</span>Start today's count</button>
+			<div class="field">What to count
+				<div class="chips" id="a-scope" style="margin-top:6px">
+					<button class="chip on" data-scope="all">Whole warehouse</button>
+					<button class="chip" data-scope="items">Some items only</button>
+				</div>
+			</div>
+			<div id="a-items" hidden>
+				<div class="scan">
+					<span class="ms">search</span>
+					<input id="a-item-q" autocomplete="off" placeholder="Search item or item group">
+				</div>
+				<div class="list" id="a-item-hits"></div>
+				<div class="chips" id="a-item-picked"></div>
+				<p class="muted small">Only these items are checked. Tags of other items read on the way are ignored.</p>
+			</div>
+			<button class="btn primary wide" id="a-begin"><span class="ms">play_arrow</span>Start count</button>
 		</div>
 		<div id="a-run" hidden>
-			<p class="step"><b>1</b> Scan every tag in this warehouse (Enter after each)</p>
+			<p class="step"><b>1</b> <span id="a-step1">Scan every tag in this warehouse</span> (Enter after each)</p>
 			<div class="scan">
 				<span class="ms">barcode_reader</span>
 				<input id="a-scan" autocomplete="off" placeholder="Scan or type tag">
@@ -244,6 +259,6 @@
 		canRemoveUnsold: {{ can_remove_unsold | tojson }}
 	};
 </script>
-<script src="/assets/rfid_retail/js/rfid_station.js?v=16"></script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=17"></script>
 </body>
 </html>
