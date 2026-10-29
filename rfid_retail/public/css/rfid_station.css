@@ -305,3 +305,4 @@ button.item:hover { background: var(--gray-50); }
 	border: 2px solid var(--gray-300); border-top-color: var(--blue); animation: rfid-spin .8s linear infinite;
 }
 #a-find-wrap { margin: 14px 0 4px; }
+.btn.text.danger { color: #dc2626; }

@@ -98,6 +98,33 @@
 		});
 	}
 
+	/** In-page yes/no dialog. The browser's confirm() can be blocked (extensions, "prevent more dialogs") and then
+	 * silently answers no, so the button seems dead. Resolves true / false. */
+	function confirmBox(title, text, yes = "OK", danger = false) {
+		return new Promise((resolve) => {
+			const back = document.createElement("div");
+			back.className = "dialog-back";
+			back.innerHTML = `<div class="dialog"><h3>${esc(title)}</h3><p class="muted" style="margin:6px 0 4px">${esc(text)}</p>
+				<div class="dialog-actions"><button class="btn text" data-r="0">Cancel</button><button class="btn text${
+					danger ? " danger" : ""
+				}" data-r="1">${esc(yes)}</button></div></div>`;
+			const close = (ok) => {
+				back.remove();
+				document.removeEventListener("keydown", onKey);
+				resolve(ok);
+			};
+			const onKey = (e) => e.key === "Escape" && close(false);
+			back.addEventListener("click", (e) => {
+				if (e.target === back) close(false);
+				const btn = e.target.closest("[data-r]");
+				if (btn) close(btn.dataset.r === "1");
+			});
+			document.addEventListener("keydown", onKey);
+			document.body.appendChild(back);
+			back.querySelector('[data-r="1"]').focus();
+		});
+	}
+
 	// ------------------------------------------------------------ navigation: header tabs + hash (browser back works)
 	const screens = [...document.querySelectorAll(".screen")];
 	if (!screens.length) return; // RFID off, or billing only: the page shows a notice
@@ -972,7 +999,7 @@
 		snack("Count finished. Check the result on the right.");
 	});
 	$("a-discard").addEventListener("click", async () => {
-		if (!confirm("Discard this count? Its scans are thrown away.")) return;
+		if (!(await confirmBox("Discard this count?", "All its scans are thrown away. Nothing in stock changes.", "Discard", true))) return;
 		await busy("Discarding the count…", () => call("audit.discard", { session: A.session }));
 		snack("Count discarded");
 		resetAudit();
