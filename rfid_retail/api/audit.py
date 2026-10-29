@@ -350,7 +350,14 @@ def discard(session):
 		return "ok"
 	if doc.status in ("Submitted for Review", "Reviewed"):
 		frappe.throw(_("{0} is {1} and is kept as a record.").format(doc.name, doc.status))
-	frappe.delete_doc("RFID Audit Session", doc.name, ignore_permissions=True)
+	# Straight deletes: delete_doc loads the whole count and removes thousands of rows one by one.
+	if frappe.db.exists("RFID Unread Sale", {"audit_session": doc.name}):
+		frappe.throw(_("{0} settled tags of a sale without tag read; it is kept as a record.").format(doc.name))
+	for child, _fields in SESSION_TABLES.values():
+		frappe.db.delete(child, {"parent": doc.name, "parenttype": "RFID Audit Session"})
+	frappe.db.delete("RFID Audit Upload", {"parent": doc.name, "parenttype": "RFID Audit Session"})
+	frappe.db.delete("RFID Audit Session", {"name": doc.name})
+	frappe.db.delete("Version", {"ref_doctype": "RFID Audit Session", "docname": doc.name})
 	return "ok"
 
 

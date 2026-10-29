@@ -973,7 +973,7 @@
 	});
 	$("a-discard").addEventListener("click", async () => {
 		if (!confirm("Discard this count? Its scans are thrown away.")) return;
-		await call("audit.discard", { session: A.session });
+		await busy("Discarding the count…", () => call("audit.discard", { session: A.session }));
 		snack("Count discarded");
 		resetAudit();
 		$("a-summary").innerHTML = '<div class="placeholder"><span class="ms">inventory</span><h3>Daily stock check</h3><p>Pick the warehouse on the left and press Start.</p></div>';
