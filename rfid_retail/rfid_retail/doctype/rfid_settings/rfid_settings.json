@@ -18,6 +18,15 @@
   "cb_sale",
   "tag_release_mode",
   "allow_unsold_tag_removal",
+  "approval_section",
+  "unread_approval_mode",
+  "approval_pin_minutes",
+  "cb_approval",
+  "approval_whatsapp",
+  "whatsapp_api_url",
+  "whatsapp_sender_id",
+  "whatsapp_auth_token",
+  "whatsapp_test_mobile",
   "device_section",
   "device_offline_minutes",
   "exit_gate_enabled",
@@ -131,8 +140,8 @@
    "depends_on": "eval:doc.check_hand_picked_items && doc.allow_unread_tag_sale",
    "fieldname": "unread_sale_needs_manager",
    "fieldtype": "Check",
-   "label": "Manager approves unread-tag sales",
-   "description": "A user who does not hold the Manager Override station needs a manager's login and password at the counter."
+   "label": "Unread-tag sales need an approver",
+   "description": "A user who does not hold the Unread Sale Approval station needs an approver (RFID Approver role by default) to approve, by PIN or by login and password (see Approval)."
   },
   {
    "fieldname": "cb_sale",
@@ -152,6 +161,63 @@
    "fieldtype": "Check",
    "label": "Allow removing tags from unsold items",
    "description": "On: users of the Tag Removal station (Station access below) can take a tag off an item that was not sold, on the Remove tags screen or in Tag history, and use it on another item. The item goes back to the to-tag list. Every removal is logged as a Tag Removed exception."
+  },
+  {
+   "fieldname": "approval_section",
+   "fieldtype": "Section Break",
+   "label": "Approval of unread-tag sales",
+   "depends_on": "eval:doc.check_hand_picked_items && doc.allow_unread_tag_sale && doc.unread_sale_needs_manager",
+   "description": "The counter asks for a PIN. Every user mapped to the Unread Sale Approval station gets their own PIN in the system notifications (bell) and, if switched on, by WhatsApp to the mobile number on their user. They can also approve with one click from the notification."
+  },
+  {
+   "fieldname": "unread_approval_mode",
+   "fieldtype": "Select",
+   "label": "How the approver approves",
+   "options": "PIN sent to approvers\nApprover login and password\nPIN or approver login",
+   "default": "PIN sent to approvers"
+  },
+  {
+   "fieldname": "approval_pin_minutes",
+   "fieldtype": "Int",
+   "label": "PIN valid for (minutes)",
+   "default": "10"
+  },
+  {
+   "fieldname": "cb_approval",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "approval_whatsapp",
+   "fieldtype": "Check",
+   "label": "Send the PIN by WhatsApp",
+   "default": "0"
+  },
+  {
+   "fieldname": "whatsapp_api_url",
+   "fieldtype": "Data",
+   "label": "WhatsApp API URL",
+   "depends_on": "approval_whatsapp",
+   "default": "https://api.botmastersender.com/api/v2/?action=send",
+   "description": "BotMasterSender style API: posts senderId, authToken, receiverId, messageText."
+  },
+  {
+   "fieldname": "whatsapp_sender_id",
+   "fieldtype": "Data",
+   "label": "WhatsApp Sender ID",
+   "depends_on": "approval_whatsapp"
+  },
+  {
+   "fieldname": "whatsapp_auth_token",
+   "fieldtype": "Password",
+   "label": "WhatsApp Auth Token",
+   "depends_on": "approval_whatsapp"
+  },
+  {
+   "fieldname": "whatsapp_test_mobile",
+   "fieldtype": "Data",
+   "label": "Test mobile",
+   "depends_on": "approval_whatsapp",
+   "description": "When set, every PIN goes to this number instead of the approvers' numbers. Clear it to go live."
   },
   {
    "fieldname": "device_section",
@@ -480,7 +546,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-28 12:00:00.000000",
+ "modified": "2026-10-29 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Settings",

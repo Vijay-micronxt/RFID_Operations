@@ -49,6 +49,7 @@ def counter_config(pos_profile):
 		"hand_pick_check": 1 if hand_pick_check() else 0,
 		"unread_sale": 1 if unread.allowed() else 0,
 		"unread_needs_manager": 1 if unread.needs_manager() else 0,
+		"unread_approval": unread.approval_mode(),
 		"unread_reasons": unread.REASONS,
 		"device": frappe.db.get_value("RFID Device",
 			{"pos_profile": pos_profile, "device_type": "Tray Reader", "is_active": 1}, "name"),
@@ -304,14 +305,8 @@ def _unread_map(basket):
 	return out
 
 
-@frappe.whitelist(methods=["POST"])
-@rate_limit(limit=30, seconds=600)
-def approve_unread(basket, item_code, reason, qty=1, note=None, manager=None, password=None):
-	"""A piece whose tag will not read (damaged or missing), while every piece of the item in stock
-	carries a tag: allow it on this bill, picked by hand. Approved by the cashier when they hold
-	Manager Override (or approval is switched off), else by a manager signing in on the counter.
-	The tag left behind becomes an RFID Unread Sale when the bill is paid."""
-	require_station("Billing")
+def _unread_basket(basket, item_code, reason, qty):
+	"""Checks shared by every way of approving a piece whose tag will not read. Returns (basket, qty, warehouse)."""
 	if not unread.allowed():
 		frappe.throw(_("Selling a piece whose tag will not read is switched off (RFID Settings)."))
 	doc = _basket(basket, for_update=True)
@@ -334,11 +329,75 @@ def approve_unread(basket, item_code, reason, qty=1, note=None, manager=None, pa
 	if qty > room:
 		frappe.throw(_("Only {0} more tagged piece(s) of {1} are in stock in {2}.").format(max(room, 0), item_code,
 			warehouse))
-	approver = unread.check_approver(manager, password)
-	doc.append("unread", {"item_code": item_code, "qty": qty, "reason": reason, "note": (note or "").strip() or None,
-		"approved_by": approver, "approved_at": now_datetime()})
+	return doc, qty, warehouse
+
+
+def add_unread_approval(basket, item_code, qty, reason, note, approver, request=None):
+	"""Allow the pieces on the bill's basket (the server counts them when the bill is submitted)."""
+	doc = frappe.get_doc("RFID Basket", basket, for_update=True)
+	doc.append("unread", {"item_code": item_code, "qty": cint(qty), "reason": reason, "note": (note or "").strip() or None,
+		"approved_by": approver, "approved_at": now_datetime(), "request": request})
 	doc.save(ignore_permissions=True)
+	return doc
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=30, seconds=600)
+def approve_unread(basket, item_code, reason, qty=1, note=None, manager=None, password=None):
+	"""A piece whose tag will not read (damaged or missing), while every piece of the item in stock
+	carries a tag: allow it on this bill, picked by hand. Approved by the cashier when they hold the
+	Unread Sale Approval station (or approval is switched off), else by an approver signing in on the
+	counter (RFID Settings > How the approver approves). The PIN way is request_unread_approval.
+	The tag left behind becomes an RFID Unread Sale when the bill is paid."""
+	require_station("Billing")
+	doc, qty, _warehouse = _unread_basket(basket, item_code, reason, qty)
+	approver = unread.check_approver(manager, password)
+	doc = add_unread_approval(doc.name, item_code, qty, reason, note, approver)
 	return {"item_code": item_code, "approved_by": approver, "unread": _unread_map(doc)}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=20, seconds=600)
+def request_unread_approval(basket, item_code, reason, qty=1, note=None):
+	"""Ask the approvers: each gets a one-time PIN (notification, and WhatsApp when on)."""
+	from rfid_retail import approval
+
+	require_station("Billing")
+	doc, qty, warehouse = _unread_basket(basket, item_code, reason, qty)
+	if unread.approval_mode() == "self":
+		return approve_unread(basket, item_code, reason, qty, note)
+	if unread.approval_mode() == "password":
+		frappe.throw(_("Approval by PIN is switched off. Ask the approver to sign in."))
+	req = approval.create_request(doc, item_code, qty, reason, (note or "").strip() or None, warehouse)
+	return {"request": req.name, "status": req.status, "expires_at": req.expires_at, "sent_to": len(req.approvers),
+		"whatsapp": cint(setting("approval_whatsapp"))}
+
+
+@frappe.whitelist(methods=["POST"])
+@rate_limit(limit=30, seconds=600)
+def confirm_unread_pin(request, pin):
+	"""The cashier types the PIN an approver gave them."""
+	from rfid_retail import approval
+
+	require_station("Billing")
+	req, error = approval.check_pin(request, pin)
+	return {**approval.status(req.name), "error": error,
+		"unread": _unread_map(frappe.get_doc("RFID Basket", req.basket))}
+
+
+@frappe.whitelist()
+def unread_approval_status(request):
+	"""Polled by the counter while it waits: an approver may approve with one click instead of a PIN."""
+	from rfid_retail import approval
+
+	require_station("Billing")
+	if frappe.db.get_value("RFID Approval Request", request, "requested_by") != frappe.session.user \
+		and not has_station("Manager Override"):
+		frappe.throw(_("Not your request."), frappe.PermissionError)
+	out = approval.status(request)
+	basket = frappe.db.get_value("RFID Approval Request", request, "basket")
+	out["unread"] = _unread_map(frappe.get_doc("RFID Basket", basket))
+	return out
 
 
 def _build_invoice(basket, lines, customer=None):

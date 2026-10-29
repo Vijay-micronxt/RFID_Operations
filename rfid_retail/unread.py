@@ -23,17 +23,32 @@ def allowed():
 	return bool(hand_pick_check() and (value is None or cint(value)))
 
 
+APPROVER_STATION = "Unread Sale Approval"
+
+
 def needs_manager(user=None):
+	"""An approver other than the cashier must approve (the cashier does not hold the approval station)."""
 	value = setting("unread_sale_needs_manager")
-	return (value is None or cint(value)) and not has_station("Manager Override", user)
+	return bool((value is None or cint(value)) and not has_station(APPROVER_STATION, user))
+
+
+def approval_mode(user=None):
+	"""self: the cashier approves; pin / password / pin_or_password: someone else does (RFID Settings)."""
+	if not needs_manager(user):
+		return "self"
+	return {"Approver login and password": "password", "PIN or approver login": "pin_or_password"}.get(
+		setting("unread_approval_mode") or "", "pin")
 
 
 def check_approver(manager=None, password=None):
-	"""The user who approves an unread-tag sale: the cashier when allowed, else a manager who signs in here."""
-	if not needs_manager():
+	"""The user who approves an unread-tag sale: the cashier when allowed, else an approver who signs in here."""
+	mode = approval_mode()
+	if mode == "self":
 		return frappe.session.user
+	if mode == "pin":
+		frappe.throw(_("Ask an approver for a PIN."), title=_("Approval"))
 	if not manager or not password:
-		frappe.throw(_("A manager has to approve this sale. Enter the manager's login and password."),
+		frappe.throw(_("An approver has to approve this sale. Enter the approver's login and password."),
 			title=_("Manager approval"))
 	from frappe.utils.password import check_password
 
@@ -46,8 +61,8 @@ def check_approver(manager=None, password=None):
 	except frappe.AuthenticationError:
 		frappe.clear_last_message()
 		frappe.throw(_("Wrong manager login or password."), title=_("Manager approval"))
-	if not has_station("Manager Override", user):
-		frappe.throw(_("{0} cannot approve this. Ask a store manager.").format(user), title=_("Manager approval"))
+	if not has_station(APPROVER_STATION, user) or user == frappe.session.user:
+		frappe.throw(_("{0} cannot approve this. Ask an approver (RFID Approver).").format(user), title=_("Manager approval"))
 	return user
 
 
