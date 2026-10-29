@@ -20,6 +20,8 @@ DEFAULT_STATION_ROLES = {
 	"Stock Audit": ("RFID Stock Operator", "RFID Store Manager"),
 	"Audit Review": ("RFID Owner", "RFID Store Manager"),
 	"Manager Override": ("RFID Store Manager",),
+	# approves selling a piece whose tag will not read (gets the PIN by WhatsApp / notification)
+	"Unread Sale Approval": ("RFID Approver",),
 }
 STATIONS = tuple(DEFAULT_STATION_ROLES)
 

@@ -16,7 +16,9 @@
   "customer",
   "sales_invoice",
   "reads_section",
-  "reads"
+  "reads",
+  "unread_section",
+  "unread"
  ],
  "fields": [
   {
@@ -80,10 +82,22 @@
    "label": "Reads",
    "options": "RFID Basket Read",
    "read_only": 1
+  },
+  {
+   "fieldname": "unread_section",
+   "fieldtype": "Section Break",
+   "label": "Sold Without Tag Read"
+  },
+  {
+   "fieldname": "unread",
+   "fieldtype": "Table",
+   "label": "Approved Unread Pieces",
+   "options": "RFID Basket Unread",
+   "description": "Pieces whose tag would not read, approved to be sold by hand."
   }
  ],
  "links": [],
- "modified": "2026-10-22 12:00:00.000000",
+ "modified": "2026-10-28 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Basket",

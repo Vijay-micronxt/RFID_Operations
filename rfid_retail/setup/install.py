@@ -1,7 +1,7 @@
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
-ROLES = ("RFID Owner", "RFID Store Manager", "RFID Cashier", "RFID Stock Operator", "RFID Device")
+ROLES = ("RFID Owner", "RFID Store Manager", "RFID Cashier", "RFID Stock Operator", "RFID Device", "RFID Approver")
 
 
 def after_install():

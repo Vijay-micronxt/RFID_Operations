@@ -12,6 +12,7 @@
   "warehouse",
   "scope",
   "areas",
+  "scope_items",
   "cb1",
   "status",
   "operator",
@@ -61,13 +62,21 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Coverage",
-   "options": "Full Store\nPartial Area"
+   "options": "Full Store\nPartial Area\nSelected Items"
   },
   {
    "default": "Sales Floor\nStockroom\nTrial Rooms\nReturns/Hold\nAlteration",
    "fieldname": "areas",
    "fieldtype": "Small Text",
    "label": "Required Areas"
+  },
+  {
+   "fieldname": "scope_items",
+   "fieldtype": "Table",
+   "label": "Items Counted",
+   "options": "RFID Audit Scope Item",
+   "depends_on": "eval:doc.scope=='Selected Items'",
+   "description": "Only these items are expected and checked. Tags of other items read on the way are ignored."
   },
   {
    "fieldname": "cb1",
@@ -216,7 +225,7 @@
   }
  ],
  "links": [],
- "modified": "2026-09-30 12:00:00.000000",
+ "modified": "2026-10-28 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Audit Session",

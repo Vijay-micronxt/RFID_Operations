@@ -300,6 +300,7 @@ doc_events = {
 			"RFID Tag Assignment",
 			"RFID Tag Event",
 			"RFID Audit Session",
+			"RFID Unread Sale",
 		)
 	},
 	"Stock Reconciliation": _inward_events,

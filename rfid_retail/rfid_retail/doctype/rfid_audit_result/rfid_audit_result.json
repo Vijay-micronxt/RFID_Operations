@@ -14,7 +14,8 @@
   "item_code",
   "detail",
   "resolution",
-  "note"
+  "note",
+  "unread_sale"
  ],
  "fields": [
   {
@@ -65,17 +66,24 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Resolution",
-   "options": "\nPending\nRescanned - Found\nConfirmed Missing\nAdjustment Requested\nAccepted\nTag Lost"
+   "options": "\nPending\nRescanned - Found\nConfirmed Missing\nAdjustment Requested\nAccepted\nTag Lost\nTag Damaged\nSold Without Read"
   },
   {
    "fieldname": "note",
    "fieldtype": "Small Text",
    "label": "Investigation Note"
+  },
+  {
+   "fieldname": "unread_sale",
+   "fieldtype": "Link",
+   "label": "Unread Sale",
+   "options": "RFID Unread Sale",
+   "read_only": 1
   }
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-10-12 12:00:00.000000",
+ "modified": "2026-10-28 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Audit Result",

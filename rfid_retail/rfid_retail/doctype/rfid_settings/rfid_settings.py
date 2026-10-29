@@ -20,6 +20,10 @@ class RFIDSettings(Document):
 		self.validate_labels()
 		if (self.mrp_round_up_to or 0) < 1:
 			self.mrp_round_up_to = 1
+		if (self.approval_pin_minutes or 0) < 1:
+			self.approval_pin_minutes = 10
+		if self.approval_whatsapp and not (self.whatsapp_api_url and self.whatsapp_sender_id and self.whatsapp_auth_token):
+			frappe.throw(_("Fill the WhatsApp API URL, Sender ID and Auth Token to send PINs by WhatsApp."))
 
 	def validate_item_codes(self):
 		if not self.item_codes_enabled:

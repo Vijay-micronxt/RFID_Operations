@@ -8,7 +8,7 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0">
-	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=14">
+	<link rel="stylesheet" href="/assets/rfid_retail/css/rfid_station.css?v=16">
 </head>
 <body>
 {% set labels = {"mapping": ["sell", "Tag garments"], "history": ["history", "Tag history"], "detach": ["content_cut", "Remove tags"], "gate": ["door_open", "Exit gate"], "audit": ["inventory", "Stock count"]} %}
@@ -208,15 +208,30 @@
 			<label class="field" id="a-device-field" hidden>Handheld
 				<select id="a-device" class="device-select" data-type="Handheld"></select>
 			</label>
-			<button class="btn primary wide" id="a-begin"><span class="ms">play_arrow</span>Start today's count</button>
+			<div class="field">What to count
+				<div class="chips" id="a-scope" style="margin-top:6px">
+					<button class="chip on" data-scope="all">Whole warehouse</button>
+					<button class="chip" data-scope="items">Some items only</button>
+				</div>
+			</div>
+			<div id="a-items" hidden>
+				<div class="scan">
+					<span class="ms">search</span>
+					<input id="a-item-q" autocomplete="off" placeholder="Search item or item group">
+				</div>
+				<div class="list" id="a-item-hits"></div>
+				<div class="chips" id="a-item-picked"></div>
+				<p class="muted small">Only these items are checked. Tags of other items read on the way are ignored.</p>
+			</div>
+			<button class="btn primary wide" id="a-begin"><span class="ms">play_arrow</span>Start count</button>
 		</div>
 		<div id="a-run" hidden>
-			<p class="step"><b>1</b> Scan every tag in this warehouse (Enter after each)</p>
+			<p class="step"><b>1</b> <span id="a-step1">Scan every tag in this warehouse</span> (Enter after each)</p>
 			<div class="scan">
 				<span class="ms">barcode_reader</span>
 				<input id="a-scan" autocomplete="off" placeholder="Scan or type tag">
 			</div>
-			<p class="muted small">Each scan is saved straight away and ticks the piece on the right.</p>
+			<p class="muted small">Each scan is saved straight away and ticks the piece on the right. <span id="a-scan-state" class="scan-state"></span></p>
 			<p class="step"><b>2</b> Everything scanned? Finish the count</p>
 			<button class="btn primary wide" id="a-compare"><span class="ms">fact_check</span>Finish count &amp; show result</button>
 			<p class="step"><b>3</b> Send the result to the manager</p>
@@ -224,11 +239,18 @@
 			<button class="btn text wide" id="a-discard"><span class="ms">delete</span>Discard this count</button>
 		</div>
 	</aside>
-	<section class="panel work" id="a-summary">
-		<div class="placeholder"><span class="ms">inventory</span><h3>Daily stock check</h3>
-			<p>Walk the warehouse with the reader and scan every tag. The system ticks off each garment that should be here
-			and shows what is missing or unexpected. Nothing in stock changes.</p>
-			<p class="muted small" style="margin-top:8px">Pick the warehouse on the left and press Start.</p></div>
+	<section class="panel work" id="a-work">
+		<div id="a-summary">
+			<div class="placeholder"><span class="ms">inventory</span><h3>Daily stock check</h3>
+				<p>Walk the warehouse with the reader and scan every tag. The system ticks off each garment that should be here
+				and shows what is missing or unexpected. Nothing in stock changes.</p>
+				<p class="muted small" style="margin-top:8px">Pick the warehouse on the left and press Start.</p></div>
+		</div>
+		<div class="scan" id="a-find-wrap" hidden>
+			<span class="ms">search</span>
+			<input id="a-find" autocomplete="off" placeholder="Find an item, code or tag in this count">
+		</div>
+		<div id="a-lists"></div>
 	</section>
 </section>
 {% endif %}
@@ -244,6 +266,6 @@
 		canRemoveUnsold: {{ can_remove_unsold | tojson }}
 	};
 </script>
-<script src="/assets/rfid_retail/js/rfid_station.js?v=16"></script>
+<script src="/assets/rfid_retail/js/rfid_station.js?v=20"></script>
 </body>
 </html>

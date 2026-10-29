@@ -1,0 +1,69 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-29 12:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "approver",
+  "mobile",
+  "whatsapp",
+  "notified",
+  "pin_hash"
+ ],
+ "fields": [
+  {
+   "columns": 3,
+   "fieldname": "approver",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Approver",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "mobile",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Mobile",
+   "read_only": 1
+  },
+  {
+   "columns": 3,
+   "fieldname": "whatsapp",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "WhatsApp",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "notified",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Bell",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pin_hash",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "PIN Hash",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-29 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RFID Retail",
+ "name": "RFID Approval Request Approver",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1
+}
