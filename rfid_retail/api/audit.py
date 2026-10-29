@@ -84,8 +84,8 @@ def begin(session):
 	doc = frappe.get_doc("RFID Audit Session", session, for_update=True)
 	if doc.status != "Planned":
 		frappe.throw(_("Session {0} already started.").format(doc.name))
-	doc.cutoff = now_datetime()
-	doc.expected = []
+	cutoff = now_datetime()
+	expected = []
 	codes = scope_item_codes(doc)
 	if codes is not None and not codes:
 		frappe.throw(_("The chosen items or groups have no items."))
@@ -98,55 +98,104 @@ def begin(session):
 			continue
 		if cint(sn.custom_is_garment_set):
 			for c in rfid.get_components(sn.name):
-				doc.append("expected", {"serial_no": sn.name, "component": c.name, "tag": c.rfid_tag,
-					"item_code": sn.item_code})
+				expected.append({"serial_no": sn.name, "component": c.name, "tag": c.rfid_tag, "item_code": sn.item_code})
 		else:
 			asg = rfid.active_assignment_for(serial_no=sn.name)
-			doc.append("expected", {"serial_no": sn.name, "item_code": sn.item_code,
+			expected.append({"serial_no": sn.name, "item_code": sn.item_code,
 				"tag": asg and frappe.db.get_value("RFID Tag Assignment", asg, "tag")})
 	tags = frappe.get_all("RFID Tag", {"warehouse": doc.warehouse, "status": ["in", rfid.IN_STOCK_TAG],
 		"serial_no": ("is", "not set"), **in_scope}, ["name", "item_code"])
-	for t in tags:
-		doc.append("expected", {"item_code": t.item_code, "tag": t.name})
-	doc.expected_units = len(units) + len(tags)
-	doc.status = "In Progress"
-	doc.save(ignore_permissions=True)
+	expected += [{"item_code": t.item_code, "tag": t.name} for t in tags]
+	_replace_rows(doc, "expected", expected)
+	doc.db_set({"cutoff": cutoff, "expected_units": len(units) + len(tags), "status": "In Progress"})
 	return summary(doc.name)
+
+
+SESSION_TABLES = {
+	"expected": ("RFID Audit Expected", ["serial_no", "component", "tag", "item_code"]),
+	"observations": ("RFID Audit Observation", ["epc"]),
+	"results": ("RFID Audit Result", ["name", "classification", "serial_no", "component", "epc", "item_code",
+		"resolution", "note", "unread_sale"]),
+	"scope_items": ("RFID Audit Scope Item", ["item_code", "item_group"]),
+}
+
+
+def _session(name, for_update=False):
+	"""The session with its tables as plain rows. Loading it as a Document builds thousands of child
+	objects for a whole store, seconds per call; the count screen calls this on every scan."""
+	doc = frappe.db.get_value("RFID Audit Session", name, "*", as_dict=True, for_update=for_update)
+	if not doc:
+		frappe.throw(_("Stock count {0} not found.").format(name), frappe.DoesNotExistError)
+	doc.doctype = "RFID Audit Session"
+	for fieldname, (child, fields) in SESSION_TABLES.items():
+		doc[fieldname] = frappe.get_all(child, {"parent": name, "parenttype": doc.doctype, "parentfield": fieldname},
+			fields, order_by="idx asc")
+	doc.uploads_count = frappe.db.count("RFID Audit Upload", {"parent": name, "parenttype": doc.doctype})
+	return doc
+
+
+def _set(doc, values):
+	frappe.db.set_value("RFID Audit Session", doc.name, values)
+	doc.update(values)
+
+
+def _replace_rows(doc, fieldname, rows, keep=False):
+	"""Write a child table in one insert. Saving the session would rewrite every one of its
+	thousands of rows (expected tags, scans) on each scan of a whole-warehouse count."""
+	child = frappe.get_meta(doc.doctype).get_field(fieldname).options
+	start = 0
+	if keep:
+		start = cint(frappe.db.get_value(child, {"parent": doc.name, "parenttype": doc.doctype,
+			"parentfield": fieldname}, "max(idx)"))
+	else:
+		frappe.db.delete(child, {"parent": doc.name, "parenttype": doc.doctype, "parentfield": fieldname})
+	if not rows:
+		return
+	valid = {df.fieldname for df in frappe.get_meta(child).fields}
+	cols = sorted({k for r in rows for k in r if k in valid})
+	now, user = now_datetime(), frappe.session.user
+	fields = ["name", "parent", "parenttype", "parentfield", "idx", "docstatus", "creation", "modified", "owner",
+		"modified_by", *cols]
+	values = [[frappe.generate_hash(length=10), doc.name, doc.doctype, fieldname, start + i + 1, 0, now, now, user, user,
+		*[r.get(c) for c in cols]] for i, r in enumerate(rows)]
+	frappe.db.bulk_insert(child, fields, values, chunk_size=1000)
 
 
 @frappe.whitelist(methods=["POST"])
 def upload(session, batch_id, codes, area=None, device=None):
 	"""Handheld upload. Re-sending the same batch_id changes nothing."""
 	require_station("Stock Audit")
-	doc = frappe.get_doc("RFID Audit Session", session, for_update=True)
+	doc = frappe._dict(frappe.db.get_value("RFID Audit Session", session, ["name", "status"], as_dict=True,
+		for_update=True) or {})
+	if not doc.name:
+		frappe.throw(_("Stock count {0} not found.").format(session))
+	doc.doctype = "RFID Audit Session"
 	if doc.status not in ("In Progress", "Comparison Ready", "Investigation Pending"):
 		frappe.throw(_("Session {0} is {1}; uploads are closed.").format(doc.name, doc.status))
-	if any(u.batch_id == batch_id for u in doc.uploads):
-		return summary(doc.name, note=_("Batch {0} was already received.").format(batch_id))
-	have = {o.epc for o in doc.observations}
+	if frappe.db.exists("RFID Audit Upload", {"parent": doc.name, "parenttype": doc.doctype, "batch_id": batch_id}):
+		return summary(doc.name, note=_("Batch {0} was already received.").format(batch_id), full=False)
+	have = set(frappe.get_all("RFID Audit Observation", {"parent": doc.name, "parenttype": doc.doctype}, pluck="epc"))
 	codes = [rfid.normalize(c) for c in _load(codes) if c]
 	now = now_datetime()
-	new = 0
+	rows = []
 	for code in codes:
 		if code in have:
 			continue
 		have.add(code)
-		new += 1
-		doc.append("observations", {"epc": code, "area": area, "first_read_at": now, "device": device,
-			"batch_id": batch_id})
-	doc.append("uploads", {"batch_id": batch_id, "device": device, "area": area, "uploaded_at": now,
-		"read_count": len(codes), "new_count": new})
-	doc.last_upload = now
-	doc.save(ignore_permissions=True)
+		rows.append({"epc": code, "area": area, "first_read_at": now, "device": device, "batch_id": batch_id})
+	_replace_rows(doc, "observations", rows, keep=True)
+	_replace_rows(doc, "uploads", [{"batch_id": batch_id, "device": device, "area": area, "uploaded_at": now,
+		"read_count": len(codes), "new_count": len(rows)}], keep=True)
+	frappe.db.set_value("RFID Audit Session", doc.name, "last_upload", now)
 	if device and frappe.db.exists("RFID Device", device):
 		frappe.db.set_value("RFID Device", device, {"last_seen": now, "health": "Online"}, update_modified=False)
-	return summary(doc.name)
+	return summary(doc.name, full=False)
 
 
 @frappe.whitelist(methods=["POST"])
 def compare(session):
 	require_station("Stock Audit")
-	doc = frappe.get_doc("RFID Audit Session", session, for_update=True)
+	doc = _session(session, for_update=True)
 	if doc.status in ("Submitted for Review", "Reviewed"):
 		frappe.throw(_("Session {0} is {1}.").format(doc.name, doc.status))
 	observed = {o.epc for o in doc.observations}
@@ -222,16 +271,15 @@ def compare(session):
 			detail=_("{0} in stock, {1} with tags. Tag the rest.").format(cint(r.actual_qty), cint(r.tagged)))
 
 	_hint_unread_sales(doc.warehouse, results)
-	doc.results = []
-	for r in results:
-		doc.append("results", r)
-	doc.verified_units, doc.incomplete_sets, doc.unverified_count = verified, incomplete, unverified
-	doc.unexpected_count, doc.sold_observed_count = unexpected, sold_seen
-	doc.movements_after_cutoff = frappe.db.count("Stock Ledger Entry",
-		{"warehouse": doc.warehouse, "creation": [">", doc.cutoff], "is_cancelled": 0})
-	doc.status = "Investigation Pending" if any(r["classification"] != "Matched" for r in results) else "Comparison Ready"
-	doc.save(ignore_permissions=True)
-	return summary(doc.name)
+	_replace_rows(doc, "results", results)
+	_set(doc, {
+		"verified_units": verified, "incomplete_sets": incomplete, "unverified_count": unverified,
+		"unexpected_count": unexpected, "sold_observed_count": sold_seen,
+		"movements_after_cutoff": frappe.db.count("Stock Ledger Entry",
+			{"warehouse": doc.warehouse, "creation": [">", doc.cutoff], "is_cancelled": 0}),
+		"status": "Investigation Pending" if any(r["classification"] != "Matched" for r in results) else "Comparison Ready",
+	})
+	return summary(doc.name, full=False)
 
 
 def _hint_unread_sales(warehouse, results):
@@ -260,7 +308,7 @@ def resolve_tag(session, epc, action, note=None):
 	and the piece goes back to the list of stock to tag.
 	"""
 	require_station("Stock Audit")
-	doc = frappe.get_doc("RFID Audit Session", session, for_update=True)
+	doc = _session(session, for_update=True)
 	if doc.status not in ("Comparison Ready", "Investigation Pending"):
 		frappe.throw(_("Finish the count first. Session {0} is {1}.").format(doc.name, doc.status))
 	epc = rfid.normalize(epc)
@@ -288,15 +336,18 @@ def resolve_tag(session, epc, action, note=None):
 		row.resolution, row.note = "Tag Damaged", note or _("Piece here, tag not reading. Put a new tag on it.")
 	else:
 		frappe.throw(_("Unknown action {0}").format(action))
-	doc.save(ignore_permissions=True)
-	return summary(doc.name)
+	frappe.db.set_value("RFID Audit Result", row.name, {"resolution": row.resolution, "note": row.note,
+		"unread_sale": row.unread_sale})
+	return summary(doc.name, full=False)
 
 
 @frappe.whitelist(methods=["POST"])
 def discard(session):
 	"""Throw away a count started by mistake (wrong warehouse, test). Reviewed counts are kept."""
 	require_station("Stock Audit")
-	doc = frappe.get_doc("RFID Audit Session", session)
+	doc = frappe._dict(frappe.db.get_value("RFID Audit Session", session, ["name", "status"], as_dict=True) or {})
+	if not doc.name:
+		return "ok"
 	if doc.status in ("Submitted for Review", "Reviewed"):
 		frappe.throw(_("{0} is {1} and is kept as a record.").format(doc.name, doc.status))
 	frappe.delete_doc("RFID Audit Session", doc.name, ignore_permissions=True)
@@ -306,11 +357,11 @@ def discard(session):
 @frappe.whitelist(methods=["POST"])
 def submit_for_review(session):
 	require_station("Stock Audit")
-	doc = frappe.get_doc("RFID Audit Session", session)
-	if doc.status not in ("Comparison Ready", "Investigation Pending"):
+	status = frappe.db.get_value("RFID Audit Session", session, "status")
+	if status not in ("Comparison Ready", "Investigation Pending"):
 		frappe.throw(_("Run the comparison first."))
-	doc.db_set("status", "Submitted for Review")
-	return summary(doc.name)
+	frappe.db.set_value("RFID Audit Session", session, "status", "Submitted for Review")
+	return summary(session, full=False)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -336,18 +387,21 @@ def mark_reviewed(session):
 
 
 @frappe.whitelist()
-def summary(session, note=None):
+def summary(session, note=None, full=True):
+	"""full: with the checklist of every expected garment. It never changes after the start, so
+	the screen keeps it and the replies to each scan leave it out (a whole store is thousands of rows)."""
 	require_station("Stock Audit", "Audit Review")
-	doc = frappe.get_doc("RFID Audit Session", session)
+	doc = _session(session)
+	full = cint(full) if not isinstance(full, bool) else full
 	counts = {}
 	for r in doc.results:
 		counts[r.classification] = counts.get(r.classification, 0) + 1
 	return {"name": doc.name, "status": doc.status, "warehouse": doc.warehouse, "cutoff": doc.cutoff,
 		"expected_units": doc.expected_units, "expected_identities": len(doc.expected),
-		"observations": len(doc.observations), "uploads": len(doc.uploads), "results": counts,
+		"observations": len(doc.observations), "uploads": doc.uploads_count, "results": counts,
 		"verified_units": doc.verified_units, "incomplete_sets": doc.incomplete_sets,
 		"movements_after_cutoff": doc.movements_after_cutoff, "note": note,
-		"checklist": _checklist(doc), "observed": [o.epc for o in doc.observations], "unknown": _unknown(doc),
+		"checklist": _checklist(doc) if full else None, "observed": [o.epc for o in doc.observations], "unknown": _unknown(doc),
 		"scope": doc.scope, "scope_items": [r.item_code or r.item_group for r in doc.scope_items],
 		"by_item": _by_item(doc)}
 
@@ -356,6 +410,7 @@ def _by_item(doc):
 	"""Per item without serial numbers: tags expected, read, and the ones not read with what was done about them."""
 	observed = {o.epc for o in doc.observations}
 	settled = {r.epc: r for r in doc.results if r.epc}
+	compared = doc.status != "In Progress"
 	items = {}
 	for e in doc.expected:
 		if e.serial_no or not e.tag:
@@ -364,7 +419,7 @@ def _by_item(doc):
 		it["expected"] += 1
 		if e.tag in observed:
 			it["found"] += 1
-		else:
+		elif compared:  # the tags themselves only matter once the count is finished
 			r = settled.get(e.tag)
 			it["not_read"].append({"tag": e.tag, "resolution": r.resolution if r else None,
 				"unread_sale": r.unread_sale if r else None})
@@ -375,8 +430,9 @@ def _by_item(doc):
 		waiting.setdefault(w.item_code, []).append({"name": w.name, "invoice": w.reference_name, "reason": w.reason,
 			"waiting": cint(w.qty) - cint(w.settled_qty)})
 	out = []
+	names = _item_names(items)
 	for it in items.values():
-		it["item_name"] = frappe.get_cached_value("Item", it["item_code"], "item_name")
+		it["item_name"] = names.get(it["item_code"])
 		it["unread_sales"] = waiting.get(it["item_code"], [])
 		out.append(it)
 	# items with tags not read first
@@ -418,15 +474,19 @@ def _unknown(doc):
 	return out
 
 
+def _item_names(codes):
+	"""Item names in one query (get_cached_value loads every whole Item on a cold cache)."""
+	codes = [c for c in codes if c]
+	return dict(frappe.get_all("Item", {"name": ["in", codes]}, ["name", "item_name"], as_list=True)) if codes else {}
+
+
 def _checklist(doc):
 	"""Expected garments with their pieces and tags, for the live checklist on the count screen."""
-	names = {}
+	names = _item_names({e.item_code for e in doc.expected})
 	garments = {}
 	for e in doc.expected:
 		key = e.serial_no or f"tag:{e.tag}"
 		if key not in garments:
-			if e.item_code not in names:
-				names[e.item_code] = frappe.get_cached_value("Item", e.item_code, "item_name")
 			garments[key] = {"serial_no": e.serial_no or e.tag, "item_name": names[e.item_code], "pieces": []}
 		role = frappe.db.get_value("Garment Component", e.component, "role") if e.component else None
 		garments[key]["pieces"].append({"role": role or names[e.item_code], "tag": e.tag})

@@ -666,35 +666,18 @@
 
 	function renderAudit(s) {
 		A.session = s.name;
+		A.last = s;
+		if (s.checklist) A.checklist = s.checklist; // sent once; replies to scans leave it out
 		store.set({ session: s.name, day: new Date().toDateString() });
 		$("a-start").hidden = true;
 		$("a-run").hidden = false;
+		$("a-find-wrap").hidden = false;
 		$("a-submit").disabled = !["Comparison Ready", "Investigation Pending"].includes(s.status);
 		$("a-discard").hidden = ["Submitted for Review", "Reviewed"].includes(s.status);
 
 		const seen = new Set(s.observed || []);
-		const expectedTags = new Set();
-		let complete = 0;
-		const rows = (s.checklist || [])
-			.map((g) => {
-				g.pieces.forEach((p) => p.tag && expectedTags.add(p.tag));
-				const found = g.pieces.filter((p) => seen.has(p.tag)).length;
-				if (found === g.pieces.length) complete++;
-				const state =
-					found === g.pieces.length
-						? '<span class="gstate ok">All found</span>'
-						: found
-							? `<span class="gstate part">${found} of ${g.pieces.length} found</span>`
-							: '<span class="gstate no">Not scanned yet</span>';
-				const chips = g.pieces
-					.map((p) => `<span class="pc ${seen.has(p.tag) ? "found" : ""}">${seen.has(p.tag) ? "✓ " : ""}${esc(p.role)}</span>`)
-					.join("");
-				return `<div class="row"><span class="thumb">${icon(g.pieces.length > 1 ? "checkroom" : "apparel")}</span>
-					<div class="grow"><b>${esc(g.item_name)}</b><small>${esc(g.serial_no)}</small>
-					${g.pieces.length > 1 ? `<div class="pieces">${chips}</div>` : ""}</div>${state}</div>`;
-			})
-			.join("");
-		const unknown = s.unknown || [];
+		const checklist = A.checklist || [];
+		const complete = checklist.filter((g) => g.pieces.every((p) => seen.has(p.tag))).length;
 		const r = s.results || {};
 		const someItems = s.scope === "Selected Items";
 		$("a-step1").textContent = someItems ? "Scan every tag of the chosen items" : "Scan every tag in this warehouse";
@@ -721,20 +704,59 @@
 						<a class="btn ghost" href="/app/rfid-audit-session/${encodeURIComponent(s.name)}">${icon("open_in_new", "small")}Open full result to note what happened</a>`
 					: `<div class="explain">${icon("info")}<span>Scan every tag ${
 							someItems ? "of the chosen items" : "in this warehouse"
-						}. Each garment below turns green when all its pieces are scanned. When you are done, press <b>Finish count</b>.</span></div>`
-			}
-			${byItemHtml(s, compared, seen)}
-			${
-				compared
-					? ""
-					: `<div class="tally">
-				<div><b>${(s.checklist || []).length}</b><small>Garments expected here</small></div>
-				<div><b>${complete}</b><small>Found complete</small></div>
-				<div><b>${seen.size}</b><small>Codes scanned</small></div>
-			</div>`
-			}
-			<h3 class="label">Garments that should be here</h3>
-			<div class="list">${rows || '<div class="empty-row">No RFID garments in this warehouse.</div>'}</div>
+						}. Each garment below turns green when all its pieces are scanned. Search below to check one item. When you are done, press <b>Finish count</b>.</span></div>
+					<div class="tally">
+						<div><b>${checklist.length}</b><small>Garments expected here</small></div>
+						<div><b>${complete}</b><small>Found complete</small></div>
+						<div><b>${seen.size}</b><small>Codes scanned</small></div>
+					</div>`
+			}`;
+		renderAuditLists();
+	}
+
+	// Lists under the summary: filtered by the search box, and capped so a whole store stays quick.
+	const LIST_CAP = 150;
+	function renderAuditLists() {
+		const s = A.last;
+		if (!s) return;
+		const q = ($("a-find").value || "").trim().toLowerCase();
+		const hit = (...texts) => !q || texts.some((t) => String(t || "").toLowerCase().includes(q));
+		const seen = new Set(s.observed || []);
+		const compared = Object.keys(s.results || {}).length > 0;
+
+		let rows = (A.checklist || []).filter((g) => hit(g.item_name, g.serial_no, ...g.pieces.map((p) => p.tag)));
+		const total = rows.length;
+		// not found first: that is what the counter is looking for
+		rows = rows
+			.map((g) => ({ g, found: g.pieces.filter((p) => seen.has(p.tag)).length }))
+			.sort((a, b) => (a.found === a.g.pieces.length) - (b.found === b.g.pieces.length))
+			.slice(0, LIST_CAP);
+		const garmentRows = rows
+			.map(({ g, found }) => {
+				const state =
+					found === g.pieces.length
+						? '<span class="gstate ok">All found</span>'
+						: found
+							? `<span class="gstate part">${found} of ${g.pieces.length} found</span>`
+							: '<span class="gstate no">Not scanned yet</span>';
+				const chips = g.pieces
+					.map((p) => `<span class="pc ${seen.has(p.tag) ? "found" : ""}">${seen.has(p.tag) ? "✓ " : ""}${esc(p.role)}</span>`)
+					.join("");
+				return `<div class="row"><span class="thumb">${icon(g.pieces.length > 1 ? "checkroom" : "apparel")}</span>
+					<div class="grow"><b>${esc(g.item_name)}</b><small>${esc(g.serial_no)}</small>
+					${g.pieces.length > 1 ? `<div class="pieces">${chips}</div>` : ""}</div>${state}</div>`;
+			})
+			.join("");
+		const more =
+			total > LIST_CAP
+				? `<div class="empty-row">Showing ${LIST_CAP} of ${total} (not found first). Search to find a garment.</div>`
+				: "";
+		const unknown = (s.unknown || []).filter((u) => hit(u.code, u.reason));
+
+		$("a-lists").innerHTML = `
+			${byItemHtml(s, compared, seen, hit, !!q)}
+			<h3 class="label">Garments that should be here${q ? ` · matching “${esc(q)}”` : ""}</h3>
+			<div class="list">${garmentRows || `<div class="empty-row">${q ? "Nothing matches this search." : "No RFID garments in this warehouse."}</div>`}${more}</div>
 			${
 				unknown.length
 					? `<h3 class="label">Tags that do not belong to any garment here</h3>
@@ -743,9 +765,29 @@
 			}`;
 	}
 
+	/** Loading cover over the result panel while a slow call runs (a whole store takes a few seconds). */
+	async function busy(label, fn) {
+		const cover = document.createElement("div");
+		cover.className = "busy";
+		cover.innerHTML = `<span class="spinner"></span><b>${esc(label)}</b>`;
+		$("a-work").appendChild(cover);
+		const buttons = [...document.querySelectorAll('[data-screen="audit"] .panel:first-child button')];
+		const was = buttons.map((b) => b.disabled);
+		buttons.forEach((b) => (b.disabled = true));
+		try {
+			return await fn();
+		} finally {
+			cover.remove();
+			buttons.forEach((b, i) => (b.disabled = was[i]));
+		}
+	}
+
 	/** Per item: tags read out of tags expected. After the count, the tags not read with what to do about each. */
-	function byItemHtml(s, compared, seen) {
-		const items = (s.by_item || []).filter((it) => compared ? it.not_read.length : s.scope === "Selected Items");
+	function byItemHtml(s, compared, seen, hit = () => true, searching = false) {
+		const items = (s.by_item || [])
+			.filter((it) => (compared ? it.not_read.length : s.scope === "Selected Items" || searching))
+			.filter((it) => hit(it.item_name, it.item_code, ...it.not_read.map((t) => t.tag)))
+			.slice(0, LIST_CAP);
 		if (!items.length) return "";
 		const settledLabel = { "Sold Without Read": "Sold earlier, tag closed", "Tag Damaged": "Tag dead, re-tag the piece", "Tag Lost": "Tag lost" };
 		const rows = items
@@ -783,7 +825,7 @@
 					<span class="gstate ${found === it.expected ? "ok" : found ? "part" : "no"}">${found} of ${it.expected} read</span></div>`;
 			})
 			.join("");
-		return `<h3 class="label">${compared ? "Tags not read, by item" : "Items in this count"}</h3><div class="list" id="a-by-item">${rows}</div>`;
+		return `<h3 class="label">${compared ? "Tags not read, by item" : searching ? "Items matching the search" : "Items in this count"}</h3><div class="list" id="a-by-item">${rows}</div>`;
 	}
 
 	async function resolveTag(tag, action) {
@@ -792,11 +834,17 @@
 			note = await ask("Piece found, tag not reading. Note (optional)", "e.g. tag torn, no read at 10 cm", true);
 			if (note === null) return;
 		}
-		renderAudit(await call("audit.resolve_tag", { session: A.session, epc: tag, action, note: note || null }));
+		renderAudit(await busy(action === "sold" ? "Closing the tag…" : "Marking the tag dead…", () =>
+			call("audit.resolve_tag", { session: A.session, epc: tag, action, note: note || null })
+		));
 		snack(action === "sold" ? `Tag ${tag} closed against the earlier sale` : `Tag ${tag} marked dead. Put a new tag on the piece.`);
 	}
 
-	$("a-summary").addEventListener("click", async (e) => {
+	$("a-find").addEventListener("input", () => {
+		clearTimeout(A.findTimer);
+		A.findTimer = setTimeout(renderAuditLists, 150);
+	});
+	$("a-lists").addEventListener("click", async (e) => {
 		const one = e.target.closest("[data-resolve]");
 		if (one) {
 			one.disabled = true;
@@ -869,6 +917,10 @@
 
 	function resetAudit() {
 		A.session = null;
+		A.last = A.checklist = null;
+		$("a-find").value = "";
+		$("a-find-wrap").hidden = true;
+		$("a-lists").innerHTML = "";
 		store.set(null);
 		$("a-run").hidden = true;
 		$("a-start").hidden = false;
@@ -878,7 +930,9 @@
 	onOpen.audit = async () => {
 		const saved = store.get();
 		if (!A.session && saved && saved.day === new Date().toDateString()) {
-			const s = await call("audit.summary", { session: saved.session }, false).catch(() => null);
+			const s = await busy("Loading the open count…", () =>
+				call("audit.summary", { session: saved.session }, false).catch(() => null)
+			);
 			if (s && s.status !== "Reviewed") renderAudit(s);
 		}
 	};
@@ -886,21 +940,35 @@
 	$("a-begin").addEventListener("click", async () => {
 		const items = A.scope === "items" ? A.picked.map((p) => (p.item_code ? { item_code: p.item_code } : { item_group: p.item_group })) : [];
 		if (A.scope === "items" && !items.length) return snack("Search and pick the items to count first", true);
-		renderAudit(await call("audit.start", { warehouse: $("a-wh").value, device: $("a-device").value || null, items }));
+		renderAudit(
+			await busy(items.length ? "Starting the count…" : "Loading every tag in the warehouse…", () =>
+				call("audit.start", { warehouse: $("a-wh").value, device: $("a-device").value || null, items })
+			)
+		);
 		$("a-scan").focus();
 	});
 	onScan($("a-scan"), async (codes) => {
-		renderAudit(
-			await call("audit.upload", {
-				session: A.session,
-				batch_id: `${$("a-device").value || "HH"}-${Date.now()}`,
-				codes,
-				device: $("a-device").value || null,
-			})
-		);
+		const state = $("a-scan-state");
+		state.textContent = `Saving ${codes.length} scan${codes.length > 1 ? "s" : ""}…`;
+		state.className = "scan-state saving";
+		try {
+			renderAudit(
+				await call("audit.upload", {
+					session: A.session,
+					batch_id: `${$("a-device").value || "HH"}-${Date.now()}`,
+					codes,
+					device: $("a-device").value || null,
+				})
+			);
+			state.textContent = "Saved";
+			state.className = "scan-state";
+		} catch (e) {
+			state.textContent = "";
+			throw e;
+		}
 	});
 	$("a-compare").addEventListener("click", async () => {
-		renderAudit(await call("audit.compare", { session: A.session }));
+		renderAudit(await busy("Comparing the count with stock…", () => call("audit.compare", { session: A.session })));
 		snack("Count finished. Check the result on the right.");
 	});
 	$("a-discard").addEventListener("click", async () => {
@@ -911,7 +979,7 @@
 		$("a-summary").innerHTML = '<div class="placeholder"><span class="ms">inventory</span><h3>Daily stock check</h3><p>Pick the warehouse on the left and press Start.</p></div>';
 	});
 	$("a-submit").addEventListener("click", async () => {
-		renderAudit(await call("audit.submit_for_review", { session: A.session }));
+		renderAudit(await busy("Sending for review…", () => call("audit.submit_for_review", { session: A.session })));
 		snack("Sent to the manager for review");
 	});
 
