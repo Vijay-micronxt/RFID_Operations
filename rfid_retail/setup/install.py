@@ -11,8 +11,8 @@ def after_install():
 def after_migrate():
 	make_roles()
 	create_custom_fields(get_custom_fields(), update=True)
-	seed_station_roles()
 	seed_setting_defaults()
+	seed_station_roles()
 	grant_counter_permissions()
 	ensure_pricing_fields()
 
@@ -38,14 +38,24 @@ def seed_station_roles():
 	"""Fresh install: fill the station table with the generic RFID roles. Never overwrites a configured table."""
 	from rfid_retail.settings import DEFAULT_STATION_ROLES
 
-	settings = frappe.get_single("RFID Settings")
-	if settings.station_roles:
+	if frappe.db.exists("RFID Station Role", {"parent": "RFID Settings", "parentfield": "station_roles"}):
 		return
-	for station, roles in DEFAULT_STATION_ROLES.items():
-		for role in roles:
-			settings.append("station_roles", {"station": station, "role": role})
-	settings.flags.ignore_permissions = True
-	settings.save()
+	add_station_roles([(station, role) for station, roles in DEFAULT_STATION_ROLES.items() for role in roles])
+
+
+def add_station_roles(rows):
+	"""Append (station, role) rows to the RFID Settings station table without saving RFID Settings.
+	A save writes every Check field that has no value yet as 0, so fields added in the same release
+	would lose their defaults (seed_setting_defaults only fills empty fields)."""
+	idx = frappe.db.sql("""select max(idx) from `tabRFID Station Role`
+		where parent='RFID Settings' and parentfield='station_roles'""")[0][0] or 0
+	now, user = frappe.utils.now(), frappe.session.user
+	for station, role in rows:
+		idx += 1
+		frappe.get_doc({"doctype": "RFID Station Role", "parent": "RFID Settings", "parenttype": "RFID Settings",
+			"parentfield": "station_roles", "idx": idx, "station": station, "role": role,
+			"owner": user, "modified_by": user, "creation": now, "modified": now}).db_insert()
+	frappe.clear_document_cache("RFID Settings", "RFID Settings")
 
 
 # Selling a serialised garment creates a Serial and Batch Bundle as the cashier.
