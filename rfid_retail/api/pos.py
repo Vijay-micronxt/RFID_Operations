@@ -51,6 +51,8 @@ def counter_config(pos_profile):
 		"unread_needs_manager": 1 if unread.needs_manager() else 0,
 		"unread_approval": unread.approval_mode(),
 		"unread_reasons": unread.REASONS,
+		# the counter can hold a bill: its basket (and the tags on it) is kept until it is resumed
+		"hold": 1,
 		"device": frappe.db.get_value("RFID Device",
 			{"pos_profile": pos_profile, "device_type": "Tray Reader", "is_active": 1}, "name"),
 	}
@@ -102,10 +104,10 @@ def get_counters():
 
 @frappe.whitelist(methods=["POST"])
 def open_basket(pos_profile, device=None):
-	"""Return the cashier's open basket on this counter, creating one if needed."""
+	"""Return the cashier's open basket on this counter, creating one if needed. Held bills are not it."""
 	require_station("Billing")
 	name = frappe.db.get_value("RFID Basket",
-		{"pos_profile": pos_profile, "cashier": frappe.session.user, "status": "Open"}, "name")
+		{"pos_profile": pos_profile, "cashier": frappe.session.user, "status": "Open", "held": 0}, "name")
 	if not name:
 		name = frappe.get_doc({"doctype": "RFID Basket", "pos_profile": pos_profile, "device": device,
 			"cashier": frappe.session.user, "status": "Open"}).insert(ignore_permissions=True).name
@@ -117,8 +119,7 @@ def scan(basket, codes, source="RFID"):
 	"""Add tray reads / scanned labels. Re-reading a tag never adds quantity."""
 	require_station("Billing")
 	doc = _basket(basket, for_update=True)
-	if doc.status != "Open":
-		frappe.throw(_("Basket {0} is {1}.").format(doc.name, doc.status))
+	_check_live(doc)
 	have = {r.epc for r in doc.reads}
 	events = []
 	for code in _load(codes):
@@ -245,11 +246,80 @@ def remove_unit(basket, serial_no=None, key=None):
 	doc = _basket(basket, for_update=True)
 	if doc.status != "Open":
 		frappe.throw(_("Basket {0} is {1}.").format(doc.name, doc.status))
+	_check_live(doc)
 	gone = [r for r in doc.reads if _line_key(r) == key]
 	doc.reads = [r for r in doc.reads if _line_key(r) != key]
 	doc.save(ignore_permissions=True)
 	_unclaim(doc, gone)
 	return basket_view(doc.name)
+
+
+def _check_live(doc):
+	"""Reads and approvals go only to the basket of the bill on screen."""
+	if doc.status != "Open":
+		frappe.throw(_("Basket {0} is {1}.").format(doc.name, doc.status))
+	if cint(doc.get("held")):
+		frappe.throw(_("Basket {0} belongs to a held bill. Resume the bill first.").format(doc.name))
+
+
+def _held_basket(basket, pos_profile=None):
+	"""A held bill's basket. The draft lives on the counter's device, so any cashier of the counter may
+	take it back; it then becomes theirs."""
+	require_station("Billing")
+	doc = frappe.get_doc("RFID Basket", basket, for_update=True)
+	if pos_profile and doc.pos_profile != pos_profile:
+		frappe.throw(_("Basket {0} was held on {1}, not on this counter.").format(doc.name, doc.pos_profile))
+	if doc.cashier != frappe.session.user and not has_station("Manager Override"):
+		users = frappe.get_all("POS Profile User", {"parent": doc.pos_profile}, pluck="user")
+		if users and frappe.session.user not in users:
+			frappe.throw(_("Basket {0} belongs to {1}.").format(doc.name, doc.cashier), frappe.PermissionError)
+	return doc
+
+
+@frappe.whitelist(methods=["POST"])
+def hold_basket(basket):
+	"""The bill was held: keep its basket, and the tags claimed on it, until the bill is resumed.
+	The cashier's next open_basket starts a new basket for the next customer."""
+	require_station("Billing")
+	doc = _basket(basket, for_update=True)
+	_check_live(doc)
+	doc.db_set({"held": 1, "held_at": now_datetime()})
+	return {"basket": doc.name, "held": 1}
+
+
+@frappe.whitelist(methods=["POST"])
+def resume_basket(basket, current=None, pos_profile=None):
+	"""A held bill was resumed: its basket becomes the cashier's open basket again. The basket the
+	cashier had open meanwhile (current) is cancelled; it must be empty, the bill on screen is held first."""
+	doc = _held_basket(basket, pos_profile)
+	if doc.status != "Open":
+		frappe.throw(_("Basket {0} is {1}.").format(doc.name, doc.status))
+	others = frappe.get_all("RFID Basket", {"pos_profile": doc.pos_profile, "cashier": frappe.session.user,
+		"status": "Open", "held": 0, "name": ["!=", doc.name]}, pluck="name")
+	if current and current != doc.name and current not in others:
+		others.append(current)
+	for name in others:
+		other = _basket(name, for_update=True)
+		if other.status != "Open" or cint(other.held):
+			continue
+		if other.reads or other.get("unread"):
+			frappe.throw(_("Basket {0} still has pieces on it. Hold or clear the bill on screen first.").format(
+				other.name))
+		other.db_set("status", "Cancelled")
+	doc.db_set({"held": 0, "held_at": None, "cashier": frappe.session.user})
+	return basket_view(doc.name)
+
+
+@frappe.whitelist(methods=["POST"])
+def release_held_basket(basket):
+	"""A held bill's draft was deleted: cancel its basket so its tags can be sold again. Only a held
+	basket is cancelled here; the basket of a bill on screen is left alone."""
+	doc = _held_basket(basket)
+	if doc.status != "Open" or not cint(doc.held):
+		return doc.status
+	_unclaim(doc, doc.reads)
+	doc.db_set({"status": "Cancelled", "held": 0})
+	return "Cancelled"
 
 
 @frappe.whitelist(methods=["POST"])
@@ -270,18 +340,20 @@ def basket_view(basket):
 	units = {}
 	for r in doc.reads:
 		if r.serial_no:
-			units.setdefault(r.serial_no, {"serial_no": r.serial_no, "seen": set()})["seen"].add(r.component or r.serial_no)
+			unit = units.setdefault(r.serial_no, {"serial_no": r.serial_no, "seen": set(), "epcs": []})
+			unit["seen"].add(r.component or r.serial_no)
+			unit["epcs"].append(r.epc)
 		elif r.item_code:
-			units[r.epc] = {"serial_no": None, "epc": r.epc, "item_code": r.item_code}
+			units[r.epc] = {"serial_no": None, "epc": r.epc, "item_code": r.item_code, "epcs": [r.epc]}
 	lines = []
 	for key, unit in units.items():
 		if not unit["serial_no"]:
-			lines.append({"key": key, "serial_no": None, "epc": key, "item_code": unit["item_code"],
+			lines.append({"key": key, "serial_no": None, "epc": key, "epcs": unit["epcs"], "item_code": unit["item_code"],
 				"item_name": frappe.get_cached_value("Item", unit["item_code"], "item_name"),
 				"is_set": 0, "pieces": [], "complete": True})
 			continue
 		sn = rfid.serial_info(key)
-		line = {"key": key, "serial_no": key, "item_code": sn.item_code, "item_name": sn.item_name,
+		line = {"key": key, "serial_no": key, "epcs": unit["epcs"], "item_code": sn.item_code, "item_name": sn.item_name,
 			"is_set": cint(sn.custom_is_garment_set), "pieces": [], "complete": True}
 		if line["is_set"]:
 			for c in rfid.get_components(key):
@@ -293,7 +365,8 @@ def basket_view(basket):
 	rates = totals.pop("rates", {})
 	for ln in lines:
 		ln["rate"] = rates.get(ln["serial_no"] or ln["item_code"], 0)
-	return {"basket": doc.name, "status": doc.status, "pos_profile": doc.pos_profile, "customer": doc.customer,
+	return {"basket": doc.name, "status": doc.status, "held": cint(doc.get("held")), "pos_profile": doc.pos_profile,
+		"customer": doc.customer,
 		"sales_invoice": doc.sales_invoice, "lines": lines, "read_count": len(doc.reads),
 		"blocked": any(not ln["complete"] for ln in lines), "totals": totals, "unread": _unread_map(doc)}
 
@@ -310,8 +383,7 @@ def _unread_basket(basket, item_code, reason, qty):
 	if not unread.allowed():
 		frappe.throw(_("Selling a piece whose tag will not read is switched off (RFID Settings)."))
 	doc = _basket(basket, for_update=True)
-	if doc.status != "Open":
-		frappe.throw(_("Basket {0} is {1}.").format(doc.name, doc.status))
+	_check_live(doc)
 	if not rfid.is_item_level(item_code):
 		frappe.throw(_("{0} is not an RFID item without serial numbers. Pick the serial number instead.").format(item_code))
 	if reason not in unread.REASONS:
