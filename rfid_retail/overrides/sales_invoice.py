@@ -54,6 +54,9 @@ def before_submit(doc, method=None):
 		basket = frappe.get_doc("RFID Basket", doc.custom_rfid_basket)
 		if basket.status == "Cancelled":
 			frappe.throw(_("RFID basket {0} is cancelled.").format(basket.name))
+		if basket.status == "Open" and cint(basket.get("held")):
+			frappe.throw(_("RFID basket {0} belongs to a held bill. Resume the bill to sell its pieces.").format(
+				basket.name))
 		if basket.status == "Billed" and basket.sales_invoice not in (None, "", doc.name):
 			frappe.throw(_("RFID basket {0} is already billed on {1}.").format(basket.name, basket.sales_invoice))
 		for read in basket.reads:
