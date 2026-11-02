@@ -76,7 +76,9 @@ def manual_add_check(item_code, pos_profile):
 		untagged = len(serials) - tagged
 	else:
 		actual = cint(flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty")))
-		tagged = min(rfid.count_item_tags(item_code, warehouse), max(actual, 0))
+		# ghost tags (pieces sold unread, still counted) do not stand for pieces on the shelf
+		real = max(rfid.count_item_tags(item_code, warehouse) - unread.outstanding(item_code, warehouse), 0)
+		tagged = min(real, max(actual, 0))
 		untagged = max(actual - tagged, 0)
 	# Every piece in stock carries a tag: one picked by hand is a tagged piece read nowhere.
 	block = bool(tagged and not untagged)

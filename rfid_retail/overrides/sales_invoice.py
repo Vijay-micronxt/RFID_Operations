@@ -114,7 +114,8 @@ def _check_untagged_stock(doc, basket_tags, approved=None):
 		short = qty - len(basket_tags.get(item_code, []))
 		if short <= 0:
 			continue
-		free = rfid.untagged_qty(item_code, warehouse)
+		# pieces without a tag: stock not covered by tags, leaving out tags of pieces already sold unread
+		free = rfid.taggable_qty(item_code, warehouse)
 		if short > free + (approved or {}).get(item_code, 0):
 			rfid.log_exception_on_failure("Manual Override",
 				_("{0} x {1} billed by hand on {2} but only {3} piece(s) in {4} have no tag.").format(
@@ -236,13 +237,17 @@ def _record_untagged_sales(doc):
 	if untagged and doc.get("custom_rfid_basket"):
 		approvals = frappe.get_doc("RFID Basket", doc.custom_rfid_basket).get("unread") or []
 	for (item_code, warehouse), short in untagged.items():
+		item_approvals = [a for a in approvals if a.item_code == item_code]
 		# Stock is already reduced here: more tags than stock means tagged pieces went out unread.
 		extra = rfid.count_item_tags(item_code, warehouse) - cint(flt(frappe.db.get_value("Bin",
 			{"item_code": item_code, "warehouse": warehouse}, "actual_qty")))
-		# tags already waiting on earlier unread sales are not counted twice
-		pending = min(short, extra - unread.outstanding(item_code, warehouse))
-		urs = pending > 0 and unread.record(doc, item_code, warehouse, pending,
-			[a for a in approvals if a.item_code == item_code])
+		# tags already waiting on earlier unread sales are not counted twice; pieces the counter said had a
+		# damaged or missing tag left that tag behind even while untagged stock was there too
+		pending = min(short, max(extra - unread.outstanding(item_code, warehouse),
+			sum(cint(a.qty) for a in item_approvals)))
+		urs = pending > 0 and unread.record(doc, item_code, warehouse, pending, item_approvals)
+		if short - max(pending, 0) > 0:
+			unread.record_no_tag(doc, item_code, warehouse, short - max(pending, 0))
 		if urs:
 			message = _("{0} x {1} sold on {2} without reading their tags ({3}). {4} tag(s) of {1} in {5} stand for "
 				"pieces that are gone ({6}); a stock count of {1} settles them.").format(

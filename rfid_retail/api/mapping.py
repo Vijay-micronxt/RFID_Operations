@@ -8,9 +8,9 @@ that differ are tagged one item at a time; sets are still tagged piece by piece.
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, flt
 
-from rfid_retail import rfid
+from rfid_retail import rfid, unread
 from rfid_retail.settings import can_remove_unsold_tags, get as setting, require_station
 from rfid_retail.api.pos import _load
 
@@ -252,9 +252,16 @@ def pending_groups(warehouse=None):
 	"""
 	require_station("Tag Mapping")
 	out = []
-	for r in rfid.untagged_items(warehouse=warehouse):
-		out.append({"kind": "item", "item_code": r.item_code, "item_name": r.item_name, "warehouse": r.warehouse,
-			"to_tag": cint(r.actual_qty) - cint(r.tagged), "in_stock": cint(r.actual_qty)})
+	for r in rfid.untagged_items(warehouse=warehouse, with_ghost=True):
+		group = {"kind": "item", "item_code": r.item_code, "item_name": r.item_name, "warehouse": r.warehouse,
+			"to_tag": cint(r.actual_qty) - cint(r.tagged) + cint(r.ghost), "in_stock": cint(r.actual_qty),
+			"tagged": cint(r.tagged), "ghost": cint(r.ghost)}
+		if group["ghost"]:
+			# Some tags stand for pieces sold without their tag read: up to that many pieces may still need one.
+			group["to_tag"] = min(group["to_tag"], group["in_stock"])
+			group["ghost_sales"] = [g.text for g in unread.ghost_story(r.item_code, r.warehouse)]
+		if group["to_tag"] > 0:
+			out.append(group)
 	filters = {"custom_rfid_status": ["in", [rfid.PENDING, rfid.RETURNED]], "status": "Active"}
 	if warehouse:
 		filters["warehouse"] = warehouse
@@ -319,7 +326,9 @@ def check_tags(codes, item_code=None):
 			"item_code", "serial_no", "component", "current_assignment"], as_dict=True)
 		if tag:
 			problem = rfid.tag_problem(tag)
-			entry.update(ok=not problem, message=problem or _("Free tag"), status=tag.status)
+			held = not problem and rfid.held_by_cancelled(tag)
+			entry.update(ok=not problem, message=problem or (_("Kept on cancelled {0} - will move here").format(held)
+				if held else _("Free tag")), status=tag.status)
 			if tag.current_assignment and tag.item_code == item_code:
 				entry["message"] = _("Already on this item")
 		out.append(entry)
@@ -336,8 +345,13 @@ def _not_too_many(codes, need, item_code, warehouse):
 
 
 @frappe.whitelist(methods=["POST"])
-def bulk_assign(item_code, warehouse, codes, device=None):
-	"""Tag up to N identical waiting units in one go: every tag usable and no more than N, or nothing is saved."""
+def bulk_assign(item_code, warehouse, codes, device=None, accept_ghost=0):
+	"""Tag up to N identical waiting units in one go: every tag usable and no more than N, or nothing is saved.
+
+	Pieces of an item with open RFID Unread Sales (tags left behind by pieces sold unread) may be tagged
+	beyond the plain untagged count, up to the number of those tags, once the user agrees (accept_ghost):
+	tags then outnumber stock until a stock count settles them. Without agreement nothing is saved and
+	the answer says what would happen (confirm_ghost)."""
 	require_station("Tag Mapping")
 	codes = list(dict.fromkeys(rfid.normalize(c) for c in _load(codes) if c))
 	if not codes:
@@ -362,10 +376,30 @@ def bulk_assign(item_code, warehouse, codes, device=None):
 		for code, serial_no in zip(codes, serials):
 			rfid.assign_tag(code, serial_no, device=device, remarks=_("Bulk tagging"))
 	else:
-		_not_too_many(codes, rfid.untagged_qty(item_code, warehouse), item_code, warehouse)
+		plain = rfid.untagged_qty(item_code, warehouse)
+		over = len(codes) - plain
+		_not_too_many(codes, max(plain, rfid.taggable_qty(item_code, warehouse)), item_code, warehouse)
+		if over > 0 and not cint(accept_ghost):
+			return _ghost_question(item_code, warehouse, len(codes), over)
 		for code in codes:
-			rfid.assign_tag(code, item_code=item_code, warehouse=warehouse, device=device, remarks=_("Bulk tagging"))
+			rfid.assign_tag(code, item_code=item_code, warehouse=warehouse, device=device, remarks=_("Bulk tagging"),
+				allow_ghost=over > 0)
+		if over > 0:
+			unread.note_ghost_tagging(item_code, warehouse, over, _("Tag garments station"))
 	return {"assigned": len(codes), "item_code": item_code, "warehouse": warehouse}
+
+
+def _ghost_question(item_code, warehouse, count, over):
+	"""Nothing saved yet: what tagging these pieces means while ghost tags of the item are open."""
+	sales = unread.ghost_story(item_code, warehouse)
+	ghost = sum(s.waiting for s in sales)
+	stock = cint(flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty")))
+	tags = rfid.count_item_tags(item_code, warehouse)
+	return {"confirm_ghost": 1, "item_code": item_code, "warehouse": warehouse, "count": count, "over": over,
+		"stock": stock, "tags": tags, "ghost": ghost, "sales": [s.text for s in sales],
+		"message": _("{0} has {1} in stock and {2} tags, but {3} of those tags stand for pieces sold without "
+			"their tag read. Tagging these {4} piece(s) makes {5} tags for {1} pieces until a stock count of {0} "
+			"finds which tags left with the customers.").format(item_code, stock, tags, ghost, count, tags + count)}
 
 
 # ---------------------------------------------------------------- tag history and repair
@@ -428,3 +462,29 @@ def item_tags(item_code, warehouse=None):
 		filters["warehouse"] = warehouse
 	return frappe.get_all("RFID Tag", filters, ["name", "status", "serial_no", "component", "warehouse",
 		"last_read_on", "cycle"], order_by="last_read_on asc", limit=500)
+
+
+@frappe.whitelist()
+def item_rfid_summary(item_code):
+	"""For the Item form: per warehouse, stock against tags, and the ghost tags (pieces sold without
+	their tag read) still counted - which bill, who sold it, when."""
+	if not rfid.is_item_level(item_code):
+		return []
+	frappe.get_doc("Item", item_code).check_permission("read")
+	out = []
+	for b in frappe.get_all("Bin", {"item_code": item_code}, ["warehouse", "actual_qty"]):
+		tags = rfid.count_item_tags(item_code, b.warehouse)
+		sales = unread.ghost_story(item_code, b.warehouse)
+		ghost = sum(s.waiting for s in sales)
+		stock = cint(flt(b.actual_qty))
+		if not (stock or tags or ghost):
+			continue
+		real = max(tags - ghost, 0)
+		out.append({"warehouse": b.warehouse, "stock": stock, "tags": tags, "ghost": ghost, "real_tags": real,
+			"untagged": max(stock - real, 0),
+			"sales": [{"name": s.name, "invoice": s.reference_name, "doctype": s.reference_doctype, "qty": s.waiting,
+				"reason": s.reason, "sold_by": s.sold_by_name or s.sold_by, "sold_on": s.sold_on} for s in sales],
+			"no_tag_sales": frappe.db.count("RFID Unread Sale", {"item_code": item_code, "warehouse": b.warehouse,
+				"status": unread.NO_TAG_STATUS})})
+	return out
+

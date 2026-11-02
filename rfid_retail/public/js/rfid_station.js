@@ -100,11 +100,12 @@
 
 	/** In-page yes/no dialog. The browser's confirm() can be blocked (extensions, "prevent more dialogs") and then
 	 * silently answers no, so the button seems dead. Resolves true / false. */
-	function confirmBox(title, text, yes = "OK", danger = false) {
+	function confirmBox(title, text, yes = "OK", danger = false, list = []) {
 		return new Promise((resolve) => {
 			const back = document.createElement("div");
 			back.className = "dialog-back";
-			back.innerHTML = `<div class="dialog"><h3>${esc(title)}</h3><p class="muted" style="margin:6px 0 4px">${esc(text)}</p>
+			const items = list.length ? `<ul style="margin:6px 0 4px 18px">${list.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : "";
+			back.innerHTML = `<div class="dialog"><h3>${esc(title)}</h3><p class="muted" style="margin:6px 0 4px">${esc(text)}</p>${items}
 				<div class="dialog-actions"><button class="btn text" data-r="0">Cancel</button><button class="btn text${
 					danger ? " danger" : ""
 				}" data-r="1">${esc(yes)}</button></div></div>`;
@@ -271,7 +272,7 @@
 		const bad = B.codes.filter((c) => B.verdicts[c] && !B.verdicts[c].ok);
 		const checking = B.codes.some((c) => !B.verdicts[c]);
 		$("mb-name").textContent = g.item_name;
-		$("mb-meta").textContent = `${g.item_code} · ${g.warehouse}`;
+		$("mb-meta").textContent = `${g.item_code} · ${g.warehouse}` + (g.ghost ? ` · ${g.ghost} piece(s) sold without tag scan, count to reconcile` : "");
 		$("mb-badge").textContent = g.kind === "serials" ? "With serial numbers" : "No serial numbers";
 		$("mb-n").textContent = n;
 		$("mb-qty").textContent = qty;
@@ -344,6 +345,18 @@
 		let r;
 		try {
 			r = await call("mapping.bulk_assign", { item_code: g.item_code, warehouse: g.warehouse, codes: B.codes });
+			// Some tags of this item stand for pieces sold without their tag read: say so, tag only if agreed.
+			if (r.confirm_ghost) {
+				const ok = await confirmBox(
+					`Sold without tag scan: ${r.ghost} piece(s)`,
+					`${r.message} Sales still to reconcile:`,
+					`Agree and tag ${r.count}`,
+					true,
+					r.sales || []
+				);
+				if (!ok) return;
+				r = await call("mapping.bulk_assign", { item_code: g.item_code, warehouse: g.warehouse, codes: B.codes, accept_ghost: 1 });
+			}
 		} finally {
 			B.saving = false;
 			renderBulk();

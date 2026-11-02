@@ -10,7 +10,9 @@ not matter).
 - Submit: inward rows activate the tags on the new units, outward rows free them,
   transfers move them to the target warehouse.
 - Cancel: undone where the tag was not reused since; otherwise the unit is
-  flagged for a new tag.
+  flagged for a new tag. Tags put on incoming stock are kept held on the cancelled
+  document (RFID Settings > Keep tags when ... cancelled) and go back on the same
+  rows when its amendment is submitted.
 
 Units received without tags are not lost: they show up in the Tag garments
 station until someone tags them.
@@ -70,8 +72,13 @@ def validate(doc, method=None):
 		return
 	keep = set()
 	used = {}
+	trimmed = []
 	for row in doc.get("items") or []:
 		tags = row_tags(row)
+		if doc.get("amended_from") and len(tags) > unit_qty(row):
+			# an amendment copies the original's tags; fewer pieces now: the extra tags stay on the original
+			trimmed += tags[unit_qty(row):]
+			tags = tags[:unit_qty(row)]
 		row.custom_rfid_tag_count = len(tags)
 		if not tags:
 			row.custom_rfid_tags = None
@@ -99,8 +106,17 @@ def validate(doc, method=None):
 			elif not rfid.has_serial(row.item_code):
 				_check_outgoing(row, code)
 	for name in frappe.get_all("RFID Tag", {"reserved_doctype": doc.doctype, "reserved_for": doc.name}, pluck="name"):
-		if name not in keep:
+		if name in keep:
+			continue
+		if doc.get("amended_from") and keep_tags_on_cancel():
+			rfid.hold_for_document(name, doc.doctype, doc.amended_from, None,
+				frappe.db.get_value("RFID Tag", name, "item_code"), _("Left out of amendment {0}").format(doc.name))
+		else:
 			rfid.release_reservation(name, _("Removed from the draft"))
+	if trimmed:
+		frappe.msgprint(_("{0} RFID tag(s) of {1} were left out because rows now have fewer pieces. They stay kept on "
+			"{1}: free them there or read them on another row.").format(len(trimmed), doc.amended_from),
+			alert=True, indicator="orange")
 
 
 def _check_outgoing(row, code):
@@ -115,6 +131,12 @@ def _check_outgoing(row, code):
 
 
 # ---------------------------------------------------------------- submit / cancel
+
+
+def keep_tags_on_cancel():
+	"""RFID Settings > Keep tags when a purchase / stock entry is cancelled (on unless switched off)."""
+	value = setting("keep_tags_on_cancel")
+	return value is None or bool(cint(value))
 
 
 def on_submit(doc, method=None):
@@ -139,6 +161,68 @@ def on_submit(doc, method=None):
 		elif way == TRANSFER:
 			for code in tags if not serials else _serial_tags(serials):
 				_move(code, source_warehouse(row), target_warehouse(row), ref)
+	if doc.get("amended_from") and doc.doctype in TAGGED_DOCTYPES:
+		_take_back_held_tags(doc)
+
+
+def held_tags(doctype, name):
+	"""Tags kept on a cancelled document, per row of it."""
+	return frappe.get_all("RFID Tag", {"status": rfid.TAG_RESERVED, "reserved_doctype": doctype,
+		"reserved_for": name}, ["name", "item_code", "reserved_row"], order_by="modified asc")
+
+
+def _take_back_held_tags(doc):
+	"""Amendment submitted: the tags kept on the cancelled original go back on the matching rows
+	(same position and item, else the first row of that item with room). Tags already read for the row
+	again count first; tags with no row left stay held on the original."""
+	held = held_tags(doc.doctype, doc.amended_from)
+	if not held:
+		return
+	old_rows = {r.name: r for r in frappe.get_all(frappe.get_meta(doc.doctype).get_field("items").options,
+		{"parent": doc.amended_from}, ["name", "idx", "item_code"])}
+	by_row = {}
+	for t in held:
+		by_row.setdefault(t.reserved_row, []).append(t)
+	rows = [r for r in doc.get("items") or [] if direction(doc, r) == IN and rfid.is_rfid_item(r.item_code)
+		and not rfid.get_set_definition(r.item_code)]
+	room = {r.name: unit_qty(r) - len(row_tags(r)) for r in rows}
+	plan = {}
+	for old_row, tags in by_row.items():
+		old = old_rows.get(old_row)
+		item_code = old.item_code if old else tags[0].item_code
+		candidates = [r for r in rows if old and r.idx == old.idx and r.item_code == item_code] + [
+			r for r in rows if r.item_code == item_code]
+		for t in tags:
+			target = next((r for r in candidates if room[r.name] > 0), None)
+			if not target:
+				break
+			room[target.name] -= 1
+			plan.setdefault(target.name, []).append(t.name)
+	moved = 0
+	for row in rows:
+		codes = plan.get(row.name)
+		if not codes:
+			continue
+		serials = get_row_serials(row) if rfid.has_serial(row.item_code) else []
+		frappe.db.savepoint("rfid_take_back")
+		try:
+			_activate(row, codes, serials, (doc.doctype, doc.name))
+		except frappe.ValidationError:
+			frappe.db.rollback(save_point="rfid_take_back")
+			frappe.clear_last_message()
+			continue
+		saved = row_tags(row) + codes
+		row.custom_rfid_tags, row.custom_rfid_tag_count = "\n".join(saved), len(saved)
+		frappe.db.set_value(row.doctype, row.name, {"custom_rfid_tags": row.custom_rfid_tags,
+			"custom_rfid_tag_count": len(saved)}, update_modified=False)
+		moved += len(codes)
+	left = len(held) - moved
+	if moved:
+		doc.add_comment("Info", _("{0} RFID tag(s) kept on {1} put back on this document's rows.").format(
+			moved, doc.amended_from))
+	if left:
+		doc.add_comment("Info", _("{0} RFID tag(s) are still held on {1}: no row here had room for them. Free them "
+			"there (RFID Tags button) or read them on another row.").format(left, doc.amended_from))
 
 
 def _activate(row, tags, serials, ref):
@@ -169,17 +253,24 @@ def _move(code, from_wh, to_wh, ref):
 def on_cancel(doc, method=None):
 	if not is_enabled():
 		return
-	# Tags this document put on garments: free them (the stock they stood for is gone again).
+	# Tags this document put on garments: the stock they stood for is gone again. They are kept on this
+	# document for its amendment (or freed at once when RFID Settings say so).
 	freed = frappe.get_all("RFID Tag Assignment",
-		{"source_doctype": doc.doctype, "source_name": doc.name, "status": "Active"}, ["tag", "item_code"])
+		{"source_doctype": doc.doctype, "source_name": doc.name, "status": "Active"},
+		["tag", "item_code", "source_row"])
+	keep = keep_tags_on_cancel() and doc.doctype in TAGGED_DOCTYPES
 	for asg in freed:
 		rfid.close_assignment(asg.tag, "Inward Cancelled", action="Correction", reference_doctype=doc.doctype,
 			reference_name=doc.name, remarks=_("{0} cancelled").format(doc.name))
+		if keep:
+			rfid.hold_for_document(asg.tag, doc.doctype, doc.name, asg.source_row, asg.item_code,
+				_("Kept on cancelled {0} for its amendment").format(doc.name))
 	if freed:
 		per_item = {}
 		for asg in freed:
 			per_item.setdefault(asg.item_code, []).append(asg.tag)
-		doc.add_comment("Info", _("Cancelled by {0}: {1} RFID tag(s) freed for reuse - {2}").format(
+		doc.add_comment("Info", (_("Cancelled by {0}: {1} RFID tag(s) kept on this document for its amendment - {2}")
+			if keep else _("Cancelled by {0}: {1} RFID tag(s) freed for reuse - {2}")).format(
 			frappe.utils.get_fullname(), len(freed),
 			"; ".join(f"{item}: {', '.join(tags)}" for item, tags in per_item.items())))
 	_flag_extra_tags(doc)
@@ -348,7 +439,9 @@ def _code_status(row, way, code):
 					on.idx, name or tag.item_code, row.item_name or row.item_code), move_from=on.row)
 			return out
 		problem = rfid.tag_problem(tag)
-		return {"ok": not problem, "message": problem or _("Free tag")}
+		held = not problem and rfid.held_by_cancelled(tag)
+		return {"ok": not problem, "message": problem or (_("Kept on cancelled {0} - will move here").format(held)
+			if held else _("Free tag"))}
 	try:
 		_check_outgoing(row, code)
 	except frappe.ValidationError as e:
@@ -502,7 +595,48 @@ def cancel_impact(doctype, name):
 		from `tabRFID Tag Assignment` a left join `tabItem` i on i.name = a.item_code
 		where a.source_doctype = %s and a.source_name = %s and a.status = 'Active'
 		group by a.item_code, i.item_name order by i.item_name""", (doctype, name), as_dict=True)
-	return {"tags": sum(r.tags for r in rows), "items": rows}
+	return {"tags": sum(r.tags for r in rows), "items": rows, "keep": 1 if keep_tags_on_cancel() else 0}
+
+
+@frappe.whitelist()
+def held_tag_rows(doctype, name):
+	"""Tags kept on a cancelled document, for its RFID Tags button."""
+	if doctype not in TAGGED_DOCTYPES:
+		return []
+	doc = frappe.get_doc(doctype, name)
+	doc.check_permission("read")
+	rows = {r.name: r for r in doc.items}
+	out = []
+	for t in held_tags(doctype, name):
+		r = rows.get(t.reserved_row)
+		out.append({"tag": t.name, "item_code": t.item_code, "row": t.reserved_row, "idx": r.idx if r else None,
+			"item_name": frappe.get_cached_value("Item", t.item_code, "item_name") if t.item_code else None})
+	amended = frappe.db.get_value(doctype, {"amended_from": name, "docstatus": ["<", 2]}, ["name", "docstatus"],
+		as_dict=True)
+	return {"tags": out, "amended": amended}
+
+
+@frappe.whitelist(methods=["POST"])
+def free_held_tags(doctype, name, codes=None):
+	"""Not amending (or not all of it): free tags kept on a cancelled document so they can go on any garment."""
+	from rfid_retail.api.pos import _load
+
+	if doctype not in TAGGED_DOCTYPES:
+		frappe.throw(_("RFID tags are read on {0}.").format(_(" / ").join(TAGGED_DOCTYPES)))
+	doc = frappe.get_doc(doctype, name)
+	doc.check_permission("cancel")
+	if doc.docstatus != 2:
+		frappe.throw(_("{0} is not cancelled.").format(name))
+	wanted = {rfid.normalize(c) for c in _load(codes)} if codes else None
+	freed = []
+	for t in held_tags(doctype, name):
+		if wanted is None or t.name in wanted:
+			rfid.release_reservation(t.name, _("Freed from cancelled {0} by {1}").format(name, frappe.utils.get_fullname()))
+			freed.append(t.name)
+	if freed:
+		doc.add_comment("Info", _("{0} RFID tag(s) kept on this cancelled document freed by {1}: {2}").format(
+			len(freed), frappe.utils.get_fullname(), ", ".join(freed)))
+	return {"freed": len(freed)}
 
 
 @frappe.whitelist()
@@ -522,10 +656,12 @@ def setup_existing_serials(item_code=None):
 
 
 def release_stale_reservations():
-	"""Scheduler: free tags reserved on drafts that were deleted or cancelled."""
+	"""Scheduler: free tags reserved on drafts that were deleted or cancelled. Tags kept on purpose on
+	a cancelled purchase / stock entry for its amendment stay until freed there or taken back."""
 	if not is_enabled():
 		return
+	keep = keep_tags_on_cancel()
 	for tag in frappe.get_all("RFID Tag", {"status": rfid.TAG_RESERVED}, ["name", "reserved_doctype", "reserved_for"]):
 		alive = tag.reserved_doctype and frappe.db.get_value(tag.reserved_doctype, tag.reserved_for, "docstatus")
-		if alive is None or cint(alive) == 2:
+		if alive is None or (cint(alive) == 2 and not (keep and tag.reserved_doctype in TAGGED_DOCTYPES)):
 			rfid.release_reservation(tag.name, _("Draft no longer exists"))

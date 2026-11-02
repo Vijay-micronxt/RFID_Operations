@@ -15,6 +15,9 @@ from rfid_retail import rfid
 from rfid_retail.settings import get as setting, has_station, hand_pick_check
 
 REASONS = ("Tag Damaged", "Tag Missing")
+# A piece out of the untagged stock (a return, a piece never tagged): sold by hand, no tag left behind
+NO_TAG = "Piece has no tag"
+NO_TAG_STATUS = "No Tag"
 
 
 def allowed():
@@ -76,10 +79,60 @@ def outstanding(item_code, warehouse):
 def open_sales(item_code, warehouse):
 	"""Open records, oldest first, with how many tags each still waits for."""
 	rows = frappe.get_all("RFID Unread Sale", {"item_code": item_code, "warehouse": warehouse, "status": "Open"},
-		["name", "qty", "settled_qty", "reference_name", "reason", "sold_on"], order_by="creation asc")
+		["name", "qty", "settled_qty", "reference_doctype", "reference_name", "reason", "sold_by", "sold_on",
+			"approved_by"], order_by="creation asc")
 	for r in rows:
 		r.waiting = max(cint(r.qty) - cint(r.settled_qty), 0)
 	return [r for r in rows if r.waiting]
+
+
+def ghost_story(item_code, warehouse):
+	"""Open unread sales of the item, in words for the people who tag or count it."""
+	rows = open_sales(item_code, warehouse)
+	for r in rows:
+		r.sold_by_name = r.sold_by and frappe.utils.get_fullname(r.sold_by)
+		r.text = _("{0} piece(s) on {1}, sold by {2} on {3} ({4}, {5})").format(
+			r.waiting, r.reference_name, r.sold_by_name or r.sold_by or "-",
+			frappe.utils.format_datetime(r.sold_on, "dd-MM-yyyy HH:mm") if r.sold_on else "-", r.reason, r.name)
+	return rows
+
+
+def note_ghost_tagging(item_code, warehouse, count, ref=None):
+	"""Tags went on pieces while some tags of the item still stand for pieces sold unread: tags now
+	outnumber stock until a stock count of the item finds which tags left with the customers."""
+	rows = open_sales(item_code, warehouse)
+	if not rows or count < 1:
+		return
+	user = frappe.utils.get_fullname()
+	for r in rows:
+		frappe.get_doc("RFID Unread Sale", r.name).add_comment("Comment", _(
+			"{0} new tag(s) put on {1} in {2} by {3}{4} while this sale's tag is still counted. Tags of {1} now "
+			"outnumber its stock; count {1} to settle.").format(count, item_code, warehouse, user,
+			_(" ({0})").format(ref) if ref else ""))
+	rfid.log_exception("Untagged Stock", _(
+		"{0} tag(s) put on {1} in {2} by {3} although {4} tag(s) of it still stand for pieces sold without a tag "
+		"read ({5}). Count {1} to settle.").format(count, item_code, warehouse, user, sum(r.waiting for r in rows),
+		", ".join(r.name for r in rows)), severity="Medium")
+
+
+def record_no_tag(doc, item_code, warehouse, qty):
+	"""Pieces sold by hand out of the untagged stock: nothing is left behind, but who sold what stays on record."""
+	urs = frappe.get_doc({
+		"doctype": "RFID Unread Sale",
+		"status": NO_TAG_STATUS,
+		"item_code": item_code,
+		"warehouse": warehouse,
+		"qty": qty,
+		"reason": NO_TAG,
+		"reference_doctype": doc.doctype,
+		"reference_name": doc.name,
+		"pos_profile": doc.get("pos_profile"),
+		"basket": doc.get("custom_rfid_basket"),
+		"sold_by": frappe.session.user,
+		"sold_on": now_datetime(),
+	})
+	urs.insert(ignore_permissions=True)
+	return urs
 
 
 def record(doc, item_code, warehouse, qty, approvals):
@@ -140,7 +193,7 @@ def settle(name, epc, audit_session=None):
 def on_invoice_cancel(doc):
 	"""The pieces come back into stock: nothing is waiting for a tag any more."""
 	for name in frappe.get_all("RFID Unread Sale", {"reference_doctype": doc.doctype, "reference_name": doc.name,
-		"status": ["in", ("Open", "Settled")]}, pluck="name"):
+		"status": ["in", ("Open", "Settled", NO_TAG_STATUS)]}, pluck="name"):
 		urs = frappe.get_doc("RFID Unread Sale", name)
 		urs.status = "Cancelled"
 		urs.add_comment("Comment", _("{0} cancelled.").format(doc.name))

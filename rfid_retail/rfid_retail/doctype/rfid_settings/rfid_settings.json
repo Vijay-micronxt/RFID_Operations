@@ -18,6 +18,7 @@
   "cb_sale",
   "tag_release_mode",
   "allow_unsold_tag_removal",
+  "keep_tags_on_cancel",
   "approval_section",
   "unread_approval_mode",
   "approval_pin_minutes",
@@ -161,6 +162,13 @@
    "fieldtype": "Check",
    "label": "Allow removing tags from unsold items",
    "description": "On: users of the Tag Removal station (Station access below) can take a tag off an item that was not sold, on the Remove tags screen or in Tag history, and use it on another item. The item goes back to the to-tag list. Every removal is logged as a Tag Removed exception."
+  },
+  {
+   "default": "1",
+   "fieldname": "keep_tags_on_cancel",
+   "fieldtype": "Check",
+   "label": "Keep tags when a purchase / stock entry is cancelled",
+   "description": "On: cancelling a Purchase Receipt, Purchase Invoice (Update Stock) or Stock Entry does not free the tags it put on garments. They stay held on the cancelled document and go back on the same rows when its amendment is submitted. Held tags can be freed from the cancelled document (RFID Tags button), or read on another row. Off: cancelling frees the tags at once."
   },
   {
    "fieldname": "approval_section",
@@ -546,7 +554,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-29 12:00:00.000000",
+ "modified": "2026-11-02 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Settings",

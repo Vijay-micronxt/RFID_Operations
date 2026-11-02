@@ -70,8 +70,42 @@ frappe.ui.form.on("Item", {
 	},
 	refresh(frm) {
 		rfid_retail.toggle_item_code(frm);
+		rfid_retail.item_tag_summary(frm);
 	},
 });
+
+// Stock against tags per warehouse. Ghost tags = tags still counted for pieces sold without their tag
+// read (RFID Unread Sale open): which bill, who sold it and when, until a stock count settles them.
+rfid_retail.item_tag_summary = async function (frm) {
+	const $layout = $(frm.layout.wrapper);
+	$layout.find(".rfid-tag-summary").remove();
+	if (frm.is_new() || !(frappe.boot.rfid_retail || {}).enabled || !frm.doc.custom_rfid_tracked || frm.doc.has_serial_no) return;
+	const item = frm.doc.name;
+	const rows = await frappe.xcall("rfid_retail.api.mapping.item_rfid_summary", { item_code: item });
+	if (frm.doc.name !== item) return; // moved to another item meanwhile
+	$layout.find(".rfid-tag-summary").remove();
+	if (!rows.length) return;
+	const esc = frappe.utils.escape_html;
+	const html = rows
+		.map((r) => {
+			let line = `<b>${esc(r.warehouse)}</b>: ${__("Stock")} <b>${r.stock}</b> · ${__("Tags")} <b>${r.tags}</b>`;
+			if (r.ghost) line += ` · <span class="text-danger">${__("Ghost tags")} <b>${r.ghost}</b></span> · ${__("Real tags")} <b>${r.real_tags}</b>`;
+			if (r.untagged) line += ` · ${__("Pieces without tag")} <b>${r.untagged}</b>`;
+			if (r.no_tag_sales) line += ` · <a href="/app/rfid-unread-sale?item_code=${encodeURIComponent(frm.doc.name)}&status=No%20Tag">${__("Sold without tag: {0} bill(s)", [r.no_tag_sales])}</a>`;
+			const sales = r.sales
+				.map(
+					(s) =>
+						`<li>${s.qty} ${__("pc")} · <a href="/app/${frappe.router.slug(s.doctype || "Sales Invoice")}/${encodeURIComponent(s.invoice)}">${esc(s.invoice)}</a> · ${esc(s.reason || "")} · ${__("by")} ${esc(s.sold_by || "-")} · ${s.sold_on ? frappe.datetime.str_to_user(s.sold_on) : "-"} · <a href="/app/rfid-unread-sale/${encodeURIComponent(s.name)}">${esc(s.name)}</a></li>`
+				)
+				.join("");
+			return `<div>${line}</div>${sales ? `<ul style="margin:4px 0 4px 18px">${sales}</ul><div class="text-muted small">${__("Ghost tags stand for pieces that left without their tag read. Count this item at the RFID station to find and free them.")}</div>` : ""}`;
+		})
+		.join("");
+	const ghost = rows.some((r) => r.ghost);
+	$(`<div class="form-message ${ghost ? "red" : "blue"} rfid-tag-summary">${html}</div>`).insertAfter(
+		$layout.children(".form-message-container").first()
+	);
+};
 
 rfid_retail.toggle_item_code = function (frm) {
 	if (!frm.is_new() || !(frappe.boot.rfid_retail || {}).item_codes) return;
@@ -87,11 +121,13 @@ const RFID_TAG_DOCTYPES = ["Purchase Receipt", "Purchase Invoice", "Stock Entry"
 RFID_TAG_DOCTYPES.forEach((doctype) => {
 	frappe.ui.form.on(doctype, {
 		refresh(frm) {
-			if (!(frappe.boot.rfid_retail || {}).enabled || frm.doc.docstatus !== 1) return;
+			if (!(frappe.boot.rfid_retail || {}).enabled) return;
 			if (doctype === "Purchase Invoice" && !frm.doc.update_stock) return;
+			if (frm.doc.docstatus === 2) return rfid_retail.held_tags_button(frm);
+			if (frm.doc.docstatus !== 1) return;
 			frm.add_custom_button(__("RFID Tags"), () => rfid_retail.tag_dialog(frm));
 		},
-		// Cancelling frees every tag this document put on garments: say so and ask again.
+		// Cancelling takes every tag this document put on garments off them: say so and ask again.
 		before_cancel(frm) {
 			if (!(frappe.boot.rfid_retail || {}).enabled) return;
 			return rfid_retail.confirm_cancel_tags(frm);
@@ -104,22 +140,28 @@ rfid_retail.confirm_cancel_tags = async function (frm) {
 	if (!impact.tags) return;
 	const esc = frappe.utils.escape_html;
 	const list = impact.items.map((r) => `<li>${esc(r.item_name || r.item_code)} (${esc(r.item_code)}): <b>${r.tags}</b></li>`).join("");
+	const text = impact.keep
+		? __(
+				"Cancelling {0} takes its <b>{1}</b> RFID tag(s) off stock, but keeps them on this document: when you amend it and submit the amendment, the same tags go back on the same rows. If you will not amend, free them from the cancelled document (RFID Tags button).",
+				[esc(frm.doc.name), impact.tags]
+		  )
+		: __(
+				"Cancelling {0} frees all <b>{1}</b> RFID tag(s) put on its garments. Those garments stop counting as tagged stock and the tags can go on other garments.",
+				[esc(frm.doc.name), impact.tags]
+		  );
 	await new Promise((resolve) => {
 		let answered = false;
 		const d = new frappe.ui.Dialog({
-			title: __("Cancel will free RFID tags"),
+			title: impact.keep ? __("Cancel keeps the RFID tags for the amendment") : __("Cancel will free RFID tags"),
 			fields: [
 				{
 					fieldtype: "HTML",
-					options: `<div class="alert alert-warning" style="margin-bottom:8px">${__(
-						"Cancelling {0} frees all <b>{1}</b> RFID tag(s) put on its garments. Those garments stop counting as tagged stock and the tags can go on other garments.",
-						[esc(frm.doc.name), impact.tags]
-					)}</div><ul style="margin:0 0 8px 16px">${list}</ul><p class="text-muted small">${__(
+					options: `<div class="alert alert-warning" style="margin-bottom:8px">${text}</div><ul style="margin:0 0 8px 16px">${list}</ul><p class="text-muted small">${__(
 						"Only cancel if this document is wrong. To fix just a wrong tag, use Remove tags at the RFID station and tag the piece again with the RFID Tags button."
 					)}</p>`,
 				},
 			],
-			primary_action_label: __("Cancel and free tags"),
+			primary_action_label: impact.keep ? __("Cancel") : __("Cancel and free tags"),
 			primary_action: () => {
 				answered = true;
 				d.hide();
@@ -137,6 +179,64 @@ rfid_retail.confirm_cancel_tags = async function (frm) {
 		};
 		d.show();
 	});
+};
+
+// Cancelled document: the tags it kept for its amendment. The amendment takes them back on submit; here
+// they can be freed (all or some) for other garments.
+rfid_retail.held_tags_button = async function (frm) {
+	const r = await frappe.xcall("rfid_retail.overrides.stock.held_tag_rows", { doctype: frm.doctype, name: frm.doc.name });
+	if (!r.tags || !r.tags.length) return;
+	frm.dashboard.set_headline_alert(
+		__("{0} RFID tag(s) are kept on this cancelled document. {1}", [
+			r.tags.length,
+			r.amended
+				? __("Submitting amendment {0} puts them back on its rows.", [r.amended.name])
+				: __("Amend and submit to put them back, or free them with RFID Tags."),
+		]),
+		"orange"
+	);
+	frm.add_custom_button(__("RFID Tags"), () => rfid_retail.held_tags_dialog(frm, r.tags));
+};
+
+rfid_retail.held_tags_dialog = function (frm, tags) {
+	const esc = frappe.utils.escape_html;
+	const rows = tags
+		.map(
+			(t) =>
+				`<tr><td><input type="checkbox" class="held-tag" value="${esc(t.tag)}" checked></td><td>${esc(t.tag)}</td><td>${
+					t.idx ? __("Row {0}", [t.idx]) : ""
+				}</td><td>${esc(t.item_name || t.item_code || "")}</td></tr>`
+		)
+		.join("");
+	const d = new frappe.ui.Dialog({
+		title: __("RFID tags kept on {0}", [frm.doc.name]),
+		size: "large",
+		fields: [
+			{
+				fieldtype: "HTML",
+				options: `<p class="text-muted">${__(
+					"These tags left stock when this document was cancelled. Submitting its amendment puts them back on the same rows. Free the ticked tags if they will not be used for the amendment; a tag read on any other row also moves there by itself."
+				)}</p><table class="table table-bordered table-sm"><thead><tr><th></th><th>${__("Tag")}</th><th>${__("Row")}</th><th>${__(
+					"Item"
+				)}</th></tr></thead><tbody>${rows}</tbody></table>`,
+			},
+		],
+		primary_action_label: __("Free ticked tags"),
+		primary_action: async () => {
+			const codes = [...d.$wrapper.find(".held-tag:checked")].map((el) => el.value);
+			if (!codes.length) return frappe.msgprint(__("Tick the tags to free."));
+			const res = await frappe.xcall("rfid_retail.overrides.stock.free_held_tags", {
+				doctype: frm.doctype,
+				name: frm.doc.name,
+				codes,
+			});
+			d.hide();
+			frappe.show_alert({ message: __("{0} tag(s) freed", [res.freed]), indicator: "green" });
+			frm.reload_doc();
+		},
+	});
+	d.get_primary_btn().removeClass("btn-primary").addClass("btn-danger");
+	d.show();
 };
 
 rfid_retail.tag_dialog = async function (frm) {
