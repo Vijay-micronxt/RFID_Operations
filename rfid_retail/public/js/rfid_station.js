@@ -80,7 +80,7 @@
 			back.className = "dialog-back";
 			back.innerHTML = `<div class="dialog"><h3>${esc(title)}</h3>
 				<input class="field-lg" placeholder="${esc(placeholder)}">
-				<div class="dialog-actions"><button class="btn text" data-r="0">Cancel</button><button class="btn text" data-r="1">OK</button></div></div>`;
+				<div class="dialog-actions">${infoOnly ? "" : '<button class="btn text" data-r="0">Cancel</button>'}<button class="btn text" data-r="1">OK</button></div></div>`;
 			const input = back.querySelector("input");
 			const close = (ok) => {
 				back.remove();
@@ -100,13 +100,13 @@
 
 	/** In-page yes/no dialog. The browser's confirm() can be blocked (extensions, "prevent more dialogs") and then
 	 * silently answers no, so the button seems dead. Resolves true / false. */
-	function confirmBox(title, text, yes = "OK", danger = false, list = []) {
+	function confirmBox(title, text, yes = "OK", danger = false, list = [], infoOnly = false) {
 		return new Promise((resolve) => {
 			const back = document.createElement("div");
 			back.className = "dialog-back";
 			const items = list.length ? `<ul style="margin:6px 0 4px 18px">${list.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : "";
 			back.innerHTML = `<div class="dialog"><h3>${esc(title)}</h3><p class="muted" style="margin:6px 0 4px">${esc(text)}</p>${items}
-				<div class="dialog-actions"><button class="btn text" data-r="0">Cancel</button><button class="btn text${
+				<div class="dialog-actions">${infoOnly ? "" : '<button class="btn text" data-r="0">Cancel</button>'}<button class="btn text${
 					danger ? " danger" : ""
 				}" data-r="1">${esc(yes)}</button></div></div>`;
 			const close = (ok) => {
@@ -409,6 +409,18 @@
 		} else if (r.kind === "group") {
 			if (r.groups.length > 1) snack(`${r.item_code || r.groups[0].item_name} waits in ${r.groups.length} warehouses - showing ${r.groups[0].warehouse}`);
 			openGroup(r.groups[0]);
+		} else if (r.ghost && r.ghost.length) {
+			// every piece tagged only on paper: some tags stand for pieces sold without a tag scan
+			const g = r.ghost[0];
+			await confirmBox(
+				`Every piece of ${r.item_name} already has a tag`,
+				`${r.item_code} · ${g.warehouse}: stock ${g.stock}, tags ${g.tags}, of which ${g.ghost} ghost tag(s) for pieces sold without a tag scan. ` +
+					`Stock and tags need reconciling: run a Stock count of this item to find and settle the ghost tag(s). Sales still open:`,
+				"OK",
+				false,
+				r.ghost.flatMap((x) => x.sales),
+				true
+			);
 		} else snack(`Every piece of ${r.item_name} already has a tag`);
 	});
 	onScan($("m-tag"), async (codes) => {

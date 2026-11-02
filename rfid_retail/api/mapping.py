@@ -303,8 +303,18 @@ def open_code(code, warehouse=None):
 		frappe.throw(_("{0} is not an RFID item. Tick RFID Tracked Garment on the item.").format(item_code))
 	groups = [g for g in pending_groups(warehouse) if g["item_code"] == item_code and g["kind"] != "unit"]
 	if not groups:
-		return {"kind": "none", "item_code": item_code,
-			"item_name": frappe.get_cached_value("Item", item_code, "item_name")}
+		out = {"kind": "none", "item_code": item_code,
+			"item_name": frappe.get_cached_value("Item", item_code, "item_name"), "ghost": []}
+		if not rfid.has_serial(item_code):
+			# tags that still stand for pieces sold without their tag read: stock and tags need a count
+			for b in frappe.get_all("Bin", {"item_code": item_code, "actual_qty": [">", 0],
+				**({"warehouse": warehouse} if warehouse else {})}, ["warehouse", "actual_qty"]):
+				sales = unread.ghost_story(item_code, b.warehouse)
+				if sales:
+					out["ghost"].append({"warehouse": b.warehouse, "stock": cint(flt(b.actual_qty)),
+						"tags": rfid.count_item_tags(item_code, b.warehouse), "ghost": sum(x.waiting for x in sales),
+						"sales": [x.text for x in sales]})
+		return out
 	return {"kind": "group", "groups": groups}
 
 
