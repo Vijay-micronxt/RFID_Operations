@@ -67,6 +67,14 @@ default, and a site where the setting is still empty counts as on.
   - If a row now has fewer pieces, the extra tags are left out with a message and stay held on the
     original.
   - An amendment made without the tags takes them back on submit, by row position and item.
+- **Amendment draft:** a headline shows the tags it carries. It warns about rows with more tags than
+  pieces, kept tags on no row, and rows with fewer tags than pieces. The **RFID Tags** button lists
+  every tag with a *Goes on* choice:
+  - any row of the amendment (to move it),
+  - or *Take off*: the tag stays kept on the original.
+
+  A live count per row (tags/pieces) helps. **Apply** saves the draft. With the same quantities,
+  nothing needs to be done.
 - **Remove:** the cancelled document shows how many tags it holds. Its **RFID Tags** button frees
   ticked tags for any garment.
 - **Move:** a held tag read on another row (RFID Tags dialog or the station) moves there. The
