@@ -255,6 +255,31 @@ def remove_unit(basket, serial_no=None, key=None):
 
 
 @frappe.whitelist(methods=["POST"])
+def drop_unread(basket, item_code, qty=None):
+	"""Pieces approved as 'tag will not read' were taken off the bill: drop that many approvals of the
+	item (all of them without qty), newest first, so a stale approval never lets the next piece through."""
+	require_station("Billing")
+	doc = _basket(basket, for_update=True)
+	if doc.status != "Open":
+		frappe.throw(_("Basket {0} is {1}.").format(doc.name, doc.status))
+	left = cint(qty) if qty not in (None, "") else None
+	keep = []
+	for r in reversed(doc.get("unread") or []):
+		if r.item_code != item_code or left == 0:
+			keep.append(r)
+			continue
+		take = cint(r.qty) if left is None else min(cint(r.qty), left)
+		if left is not None:
+			left -= take
+		if cint(r.qty) > take:
+			r.qty = cint(r.qty) - take
+			keep.append(r)
+	doc.set("unread", list(reversed(keep)))
+	doc.save(ignore_permissions=True)
+	return basket_view(doc.name)
+
+
+@frappe.whitelist(methods=["POST"])
 def cancel_basket(basket):
 	require_station("Billing")
 	doc = _basket(basket, for_update=True)
