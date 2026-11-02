@@ -204,7 +204,7 @@ rfid_retail.held_tags_dialog = function (frm, tags) {
 	const rows = tags
 		.map(
 			(t) =>
-				`<tr><td><input type="checkbox" class="held-tag" value="${esc(t.tag)}" checked></td><td>${esc(t.tag)}</td><td>${
+				`<tr data-tag="${esc(t.tag)}"><td><input type="checkbox" class="held-tag" value="${esc(t.tag)}"></td><td>${esc(t.tag)}</td><td>${
 					t.idx ? __("Row {0}", [t.idx]) : ""
 				}</td><td>${esc(t.item_name || t.item_code || "")}</td></tr>`
 		)
@@ -217,7 +217,11 @@ rfid_retail.held_tags_dialog = function (frm, tags) {
 				fieldtype: "HTML",
 				options: `<p class="text-muted">${__(
 					"These tags left stock when this document was cancelled. Submitting its amendment puts them back on the same rows. Free the ticked tags if they will not be used for the amendment; a tag read on any other row also moves there by itself."
-				)}</p><table class="table table-bordered table-sm"><thead><tr><th></th><th>${__("Tag")}</th><th>${__("Row")}</th><th>${__(
+				)}</p><input type="text" class="form-control held-scan" autocomplete="off" placeholder="${__(
+					"Scan the tags to free here (or tick them below)"
+				)}"><div class="held-scan-msg small" style="margin:4px 0 8px"></div><div style="margin-bottom:6px"><a class="held-all">${__(
+					"Tick all"
+				)}</a> · <a class="held-none">${__("Untick all")}</a> · <span class="held-ticked text-muted"></span></div><table class="table table-bordered table-sm"><thead><tr><th></th><th>${__("Tag")}</th><th>${__("Row")}</th><th>${__(
 					"Item"
 				)}</th></tr></thead><tbody>${rows}</tbody></table>`,
 			},
@@ -237,7 +241,45 @@ rfid_retail.held_tags_dialog = function (frm, tags) {
 		},
 	});
 	d.get_primary_btn().removeClass("btn-primary").addClass("btn-danger");
+	const $w = d.$wrapper;
+	const count = () => $w.find(".held-ticked").text(__("{0} of {1} ticked", [$w.find(".held-tag:checked").length, tags.length]));
+	const mark = (code) => {
+		const $row = $w.find(`tr[data-tag="${CSS.escape(code)}"]`);
+		if (!$row.length) return false;
+		$row.find(".held-tag").prop("checked", true);
+		$row.css("background", "var(--green-highlight-color, #e4f5e9)");
+		return true;
+	};
+	// the RFID reader types codes like a keyboard: take every code in the box a moment after the last key
+	let timer = null;
+	const take = () => {
+		const $in = $w.find(".held-scan");
+		const codes = [...new Set(($in.val() || "").split(/[\s,]+/).map((c) => c.trim().toUpperCase()).filter(Boolean))];
+		$in.val("");
+		if (!codes.length) return;
+		const unknown = codes.filter((c) => !mark(c));
+		$w.find(".held-scan-msg")
+			.toggleClass("text-danger", !!unknown.length)
+			.toggleClass("text-success", !unknown.length)
+			.text(unknown.length ? __("Not kept on this document: {0}", [unknown.join(", ")]) : __("{0} tag(s) ticked", [codes.length]));
+		count();
+	};
+	$w.on("input", ".held-scan", () => {
+		clearTimeout(timer);
+		timer = setTimeout(take, 400);
+	});
+	$w.on("keydown", ".held-scan", (e) => {
+		if (e.key !== "Enter") return;
+		e.preventDefault();
+		clearTimeout(timer);
+		take();
+	});
+	$w.on("change", ".held-tag", count);
+	$w.on("click", ".held-all", () => ($w.find(".held-tag").prop("checked", true), count()));
+	$w.on("click", ".held-none", () => ($w.find(".held-tag").prop("checked", false), count()));
+	count();
 	d.show();
+	setTimeout(() => $w.find(".held-scan").trigger("focus"), 300);
 };
 
 // Amendment draft: the original's tags come along on the same rows. Before submit they can be put on
