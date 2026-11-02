@@ -233,7 +233,7 @@ def _activate(row, tags, serials, ref):
 			rfid.assign_tag(code, serial_no, source=source)
 		return
 	for code in tags:
-		rfid.assign_tag(code, item_code=row.item_code, warehouse=target_warehouse(row), source=source)
+		rfid.assign_tag(code, item_code=row.item_code, warehouse=target_warehouse(row), source=source, allow_ghost=True)
 
 
 def _serial_tags(serials):
@@ -386,7 +386,9 @@ def _row_state(doc, row):
 			where source_doctype = %s and source_name = %s and source_row = %s
 			and (status = 'Active' or ifnull(close_reason, '') not in %s)""",
 			(doc.doctype, doc.name, row.name, rfid.RETAG_REASONS))[0][0]
-		out["to_tag"] = max(min(qty - tagged, rfid.untagged_qty(row.item_code, target_warehouse(row))), 0)
+		# ghost tags (pieces sold unread, still counted) do not make a received piece tagged
+		out["to_tag"] = max(min(qty - tagged, rfid.taggable_qty(row.item_code, target_warehouse(row))), 0)
+		out["ghost"] = rfid.ghost_qty(row.item_code, target_warehouse(row)) if out["to_tag"] else 0
 	else:
 		out["to_tag"] = max(qty - len(done), 0)
 	return out
@@ -476,8 +478,14 @@ def assign_row_tags(doctype, name, row, codes):
 		for code, serial_no in zip(codes, state["serials"]):
 			rfid.assign_tag(code, serial_no, source=source)
 	elif way == IN:
+		over = len(codes) - rfid.untagged_qty(child.item_code, target_warehouse(child))
 		for code in codes:
-			rfid.assign_tag(code, item_code=child.item_code, warehouse=target_warehouse(child), source=source)
+			rfid.assign_tag(code, item_code=child.item_code, warehouse=target_warehouse(child), source=source,
+				allow_ghost=True)
+		if over > 0:
+			from rfid_retail import unread
+
+			unread.note_ghost_tagging(child.item_code, target_warehouse(child), over, doc.name)
 	elif way == TRANSFER:
 		for code in codes:
 			_move(code, source_warehouse(child), target_warehouse(child), source)
@@ -578,7 +586,7 @@ def move_row_tags(doctype, name, moves):
 			asg = rfid.assign_tag(code, state["serials"][0], source=(doctype, name, target.name),
 				remarks=_("Moved from row {0}").format(on.idx))
 		else:
-			asg = rfid.assign_tag(code, item_code=target.item_code, warehouse=target_warehouse(target),
+			asg = rfid.assign_tag(code, item_code=target.item_code, warehouse=target_warehouse(target), allow_ghost=True,
 				source=(doctype, name, target.name), remarks=_("Moved from row {0}").format(on.idx))
 		rfid.add_to_source_row(asg, code, _("RFID tag {0} moved from row {1} to row {2} ({3}) by {4}.").format(
 			code, on.idx, target.idx, target.item_code, user))
