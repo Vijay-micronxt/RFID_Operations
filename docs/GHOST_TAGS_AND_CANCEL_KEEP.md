@@ -154,7 +154,9 @@ A POS bill (Sales Invoice) cancelled on the desk puts its sold tags back on thei
 (Assigned) and cancels its RFID basket. The desk amendment copies that cancelled basket, so its
 submit stopped with *RFID basket ... is cancelled*.
 
-**Now:** saving the amendment gives it a new open basket with the reads of the original bill:
+**Now:** submitting the amendment gives it a new basket with the reads of the original bill. This
+is done on submit, not on save: a draft is validated many times, and a failed submit leaves nothing
+behind.
 
 - A read is taken over only while its tag is still on the same item, or its serial is in stock,
   and no other open basket holds it.
@@ -208,7 +210,7 @@ the bill is resumed or its draft is deleted.
 
 ## Tested
 
-Tested on a copy of the Chandrlok data. The automated scenario rolls back and has 52 checks,
+Tested on a copy of the Chandrlok data. The automated scenario rolls back and has 54 checks,
 all passing:
 
 - ghost counts

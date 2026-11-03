@@ -253,7 +253,6 @@ after_install = "rfid_retail.setup.install.after_install"
 after_migrate = "rfid_retail.setup.install.after_migrate"
 
 _rfid_invoice_events = {
-	"validate": "rfid_retail.overrides.sales_invoice.validate",
 	"before_submit": "rfid_retail.overrides.sales_invoice.before_submit",
 	"on_submit": "rfid_retail.overrides.sales_invoice.on_submit",
 	"on_cancel": "rfid_retail.overrides.sales_invoice.on_cancel",

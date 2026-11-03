@@ -41,16 +41,16 @@ def rfid_rows(doc):
 			yield row
 
 
-def validate(doc, method=None):
+def _take_over_cancelled_basket(doc):
 	"""Amending a cancelled counter bill: the desk copies the original's RFID basket, which the cancel
-	closed. Give the amendment a new basket with the same reads, as far as those tags and units are
-	back on their garments (the cancel put them back), so the same pieces are sold and tracked again."""
-	if not is_enabled() or doc.docstatus != 0 or not doc.get("amended_from") or not doc.get("custom_rfid_basket"):
+	closed. On submit the amendment gets a new basket with the same reads, as far as those tags and units
+	are back on their garments (the cancel put them back), so the same pieces are sold and tracked again.
+	Done on submit, not on save: a draft is validated many times, and a failed submit rolls it back."""
+	if not doc.get("amended_from") or not doc.get("custom_rfid_basket"):
 		return
-	old = frappe.db.get_value("RFID Basket", doc.custom_rfid_basket, ["name", "status", "sales_invoice"], as_dict=True)
-	if not old or old.status != "Cancelled":
+	if frappe.db.get_value("RFID Basket", doc.custom_rfid_basket, "status") != "Cancelled":
 		return
-	doc.custom_rfid_basket = _basket_for_amendment(doc, old.name)
+	doc.custom_rfid_basket = _basket_for_amendment(doc, doc.custom_rfid_basket)
 
 
 def _basket_for_amendment(doc, old_name):
@@ -103,6 +103,7 @@ def before_submit(doc, method=None):
 				frappe.throw(_("Row {0}: {1} has no RFID identity. Only RFID-tracked items can be sold here.").format(
 					row.idx, row.item_code))
 	basket_reads, basket_tags, approved = {}, {}, {}
+	_take_over_cancelled_basket(doc)
 	if doc.get("custom_rfid_basket"):
 		basket = frappe.get_doc("RFID Basket", doc.custom_rfid_basket)
 		if basket.status == "Cancelled":
