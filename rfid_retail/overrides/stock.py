@@ -327,9 +327,10 @@ def restore_tags(doc, actions):
 				["source_doctype", "source_name", "source_row"])
 			frappe.db.savepoint("rfid_restore")
 			try:
+				# the unit is back in stock: ghost tags (pieces sold unread) are not on any piece of it
 				rfid.assign_tag(ev.tag, ev.serial_no, ev.component, item_code=ev.item_code,
 					warehouse=ev.warehouse, source=source if source and source[0] else (doc.doctype, doc.name),
-					remarks=_("Restored: {0} cancelled").format(doc.name))
+					remarks=_("Restored: {0} cancelled").format(doc.name), allow_ghost=True)
 				continue
 			except frappe.ValidationError:
 				frappe.db.rollback(save_point="rfid_restore")
