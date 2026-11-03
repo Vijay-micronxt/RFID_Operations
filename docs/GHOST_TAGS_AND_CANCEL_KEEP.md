@@ -148,6 +148,27 @@ Warning* and *Chandrlok Purchase Invoice Cancel Stock Warning*. They replace the
 warning and say the tags are freed. After deploy, make them use `impact.keep` (as done on the
 test copy) or disable them.
 
+## 4. Amending a cancelled counter bill
+
+A POS bill (Sales Invoice) cancelled on the desk puts its sold tags back on their garments
+(Assigned) and cancels its RFID basket. The desk amendment copies that cancelled basket, so its
+submit stopped with *RFID basket ... is cancelled*.
+
+**Now:** saving the amendment gives it a new open basket with the reads of the original bill:
+
+- A read is taken over only while its tag is still on the same item, or its serial is in stock,
+  and no other open basket holds it.
+- Tag-will-not-read approvals are taken over too.
+- An alert names the new basket. A read that was not taken over is named, for example when the
+  tag was sold again on another bill. Read that piece again.
+- If nothing can be taken over, the amendment has no basket. The usual hand-pick checks apply.
+
+Submitting the amendment sells the same tags again, so the tag history reads Sold, then Assigned
+(cancel), then Sold (amendment).
+
+**Cancel without amending:** the tags stay on their garments, the stock is back, and the open
+unread sales of the bill are cancelled. Nothing else is needed.
+
 ## New in the system
 
 - RFID Settings: `keep_tags_on_cancel` (Check, default on)
@@ -173,7 +194,7 @@ test copy) or disable them.
 
 ## Tested
 
-Tested on a copy of the Chandrlok data. The automated scenario rolls back and has 38 checks,
+Tested on a copy of the Chandrlok data. The automated scenario rolls back and has 44 checks,
 all passing:
 
 - ghost counts
@@ -188,6 +209,7 @@ all passing:
 - moving a kept tag to another PR
 - freeing kept tags
 - setting off
+- counter bill cancelled and amended: new basket, same tags sold again
 
 The earlier unread-sale and stock-count scenario still passes 63 of 63. `drop_unread` was
 checked directly.

@@ -41,6 +41,59 @@ def rfid_rows(doc):
 			yield row
 
 
+def validate(doc, method=None):
+	"""Amending a cancelled counter bill: the desk copies the original's RFID basket, which the cancel
+	closed. Give the amendment a new basket with the same reads, as far as those tags and units are
+	back on their garments (the cancel put them back), so the same pieces are sold and tracked again."""
+	if not is_enabled() or doc.docstatus != 0 or not doc.get("amended_from") or not doc.get("custom_rfid_basket"):
+		return
+	old = frappe.db.get_value("RFID Basket", doc.custom_rfid_basket, ["name", "status", "sales_invoice"], as_dict=True)
+	if not old or old.status != "Cancelled":
+		return
+	doc.custom_rfid_basket = _basket_for_amendment(doc, old.name)
+
+
+def _basket_for_amendment(doc, old_name):
+	from rfid_retail.api.pos import _claim, _claim_tag
+
+	old = frappe.get_doc("RFID Basket", old_name)
+	new = frappe.get_doc({"doctype": "RFID Basket", "pos_profile": old.pos_profile, "device": old.device,
+		"cashier": frappe.session.user, "status": "Open", "customer": doc.get("customer")})
+	skipped = []
+	for r in old.reads:
+		if r.serial_no:
+			sn = rfid.serial_info(r.serial_no)
+			usable = sn and sn.custom_rfid_status == rfid.READY and not _open_elsewhere(sn.custom_rfid_basket, old_name)
+		else:
+			tag = frappe.db.get_value("RFID Tag", r.epc, ["status", "item_code", "basket"], as_dict=True)
+			usable = tag and tag.status == rfid.TAG_ASSIGNED and tag.item_code == r.item_code \
+				and not _open_elsewhere(tag.basket, old_name)
+		if not usable:
+			skipped.append(r.component or r.serial_no or r.epc)
+			continue
+		new.append("reads", {k: r.get(k) for k in ("epc", "source", "serial_no", "component", "item_code",
+			"read_at", "read_by")})
+	for u in old.get("unread") or []:
+		new.append("unread", {k: u.get(k) for k in ("item_code", "qty", "reason", "note", "approved_by",
+			"approved_at", "request")})
+	if not new.reads and not new.get("unread"):
+		return None
+	new.insert(ignore_permissions=True)
+	for r in new.reads:
+		_claim(new, r.serial_no) if r.serial_no else _claim_tag(new, r.epc)
+	msg = _("Amendment of {0}: the RFID reads of its bill ({1}) were taken over on basket {2}.").format(
+		doc.amended_from, len(new.reads), new.name)
+	if skipped:
+		msg += " " + _("Not taken over (tag reused or unit not ready, read the pieces again): {0}").format(
+			", ".join(skipped))
+	frappe.msgprint(msg, alert=True, indicator="orange" if skipped else "green")
+	return new.name
+
+
+def _open_elsewhere(basket, old_name):
+	return bool(basket and basket != old_name and frappe.db.get_value("RFID Basket", basket, "status") == "Open")
+
+
 def before_submit(doc, method=None):
 	if not is_enabled() or cint(doc.get("is_return")):
 		return
