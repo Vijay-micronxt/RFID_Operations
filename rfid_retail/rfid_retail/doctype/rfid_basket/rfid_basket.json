@@ -13,6 +13,8 @@
   "cashier",
   "cb1",
   "status",
+  "held",
+  "held_at",
   "customer",
   "sales_invoice",
   "reads_section",
@@ -59,6 +61,23 @@
    "read_only": 1
   },
   {
+   "default": "0",
+   "fieldname": "held",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "On Hold",
+   "read_only": 1,
+   "description": "The bill was held at the counter. Its tags stay on this basket until the bill is resumed or its draft is deleted."
+  },
+  {
+   "depends_on": "held",
+   "fieldname": "held_at",
+   "fieldtype": "Datetime",
+   "label": "Held At",
+   "read_only": 1
+  },
+  {
    "fieldname": "customer",
    "fieldtype": "Link",
    "label": "Customer",
@@ -97,7 +116,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-28 12:00:00.000000",
+ "modified": "2026-10-31 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Basket",

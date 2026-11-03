@@ -22,6 +22,7 @@ def item(data):
 		"RFID Tag": "item_code",
 		"RFID Tag Assignment": "item_code",
 		"RFID Tag Event": "item_code",
+		"RFID Unread Sale": "item_code",
 	})
 
 
@@ -40,6 +41,7 @@ def sales_invoice(data):
 		"RFID Basket": None,
 		"RFID Tag Assignment": None,
 		"RFID Tag Event": "reference_name",
+		"RFID Unread Sale": "reference_name",
 		"Garment Component": None,
 	})
 

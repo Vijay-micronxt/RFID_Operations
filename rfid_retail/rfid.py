@@ -180,6 +180,9 @@ def tag_problem(tag, source=None):
 	if tag.status == TAG_RESERVED:
 		if source and (tag.reserved_doctype, tag.reserved_for) == tuple(source[:2]):
 			return None
+		if held_by_cancelled(tag):
+			# kept on a cancelled document for its amendment: reading it elsewhere moves it there
+			return None
 		return _("Tag {0} is already read on draft {1} {2}.").format(tag.name, tag.reserved_doctype, tag.reserved_for)
 	if tag.status != TAG_AVAILABLE or tag.current_assignment:
 		return _("Tag {0} is already on {1}. Free it or use another tag.").format(
@@ -188,7 +191,7 @@ def tag_problem(tag, source=None):
 
 
 def assign_tag(epc, serial_no=None, component=None, device=None, remarks=None, item_code=None,
-	warehouse=None, source=None):
+	warehouse=None, source=None, allow_ghost=False):
 	"""Put a tag on a garment.
 
 	serial_no given: the tag identifies that unit (or one piece of a set).
@@ -242,7 +245,7 @@ def assign_tag(epc, serial_no=None, component=None, device=None, remarks=None, i
 			frappe.throw(_("{0} has serial numbers. Pick the unit (serial) the tag goes on.").format(item_code))
 		if not warehouse:
 			frappe.throw(_("Warehouse is needed to tag {0}.").format(item_code))
-		if untagged_qty(item_code, warehouse) < 1:
+		if (taggable_qty if allow_ghost else untagged_qty)(item_code, warehouse) < 1:
 			frappe.throw(_("Every unit of {0} in {1} already has a tag.").format(item_code, warehouse))
 
 	cycle = cint(tag.cycle) + 1
@@ -395,6 +398,26 @@ def reserve_tag(epc, doctype, name, row, item_code):
 		reference_row=row)
 
 
+def held_by_cancelled(tag):
+	"""Name of the cancelled document a tag is kept on (RFID Settings > Keep tags when ... cancelled), else None."""
+	if tag.get("status") != TAG_RESERVED or not tag.get("reserved_doctype") or not tag.get("reserved_for"):
+		return None
+	if cint(frappe.db.get_value(tag.reserved_doctype, tag.reserved_for, "docstatus")) == 2:
+		return tag.reserved_for
+	return None
+
+
+def hold_for_document(epc, doctype, name, row, item_code, reason=None):
+	"""Park a free tag on a (cancelled) document row: nobody else's draft takes it, the amendment gets it back."""
+	tag = frappe.get_doc("RFID Tag", normalize(epc), for_update=True)
+	previous = tag.status
+	tag.update({"status": TAG_RESERVED, "reserved_doctype": doctype, "reserved_for": name, "reserved_row": row,
+		"item_code": item_code, "basket": None})
+	tag.save(ignore_permissions=True)
+	log_tag_event(tag, "Reserved", previous_status=previous, reference_doctype=doctype, reference_name=name,
+		reference_row=row, reason=reason)
+
+
 def release_reservation(epc, reason=None):
 	tag = frappe.get_doc("RFID Tag", normalize(epc), for_update=True)
 	if tag.status != TAG_RESERVED:
@@ -478,13 +501,31 @@ def untagged_qty(item_code, warehouse):
 	return max(cint(actual) - count_item_tags(item_code, warehouse), 0)
 
 
+def ghost_qty(item_code, warehouse):
+	"""Tags of the item still counted in stock although their pieces were sold unread (open RFID Unread Sales)."""
+	from rfid_retail import unread
+
+	return unread.outstanding(item_code, warehouse)
+
+
+def taggable_qty(item_code, warehouse):
+	"""Units that may get a tag when the ghost tags (pieces sold unread) are left out of the count.
+	More than untagged_qty only while an RFID Unread Sale of the item is open."""
+	actual = cint(flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty")))
+	real = max(count_item_tags(item_code, warehouse) - ghost_qty(item_code, warehouse), 0)
+	return max(actual - real, 0)
+
+
 def count_item_tags(item_code, warehouse):
 	return frappe.db.count("RFID Tag", {"item_code": item_code, "warehouse": warehouse,
 		"status": ["in", IN_STOCK_TAG], "serial_no": ("is", "not set")})
 
 
-def untagged_items(warehouse=None, item_code=None):
-	"""Non-serial RFID items with more stock than tags, per warehouse."""
+def untagged_items(warehouse=None, item_code=None, with_ghost=False):
+	"""Non-serial RFID items with more stock than tags, per warehouse.
+
+	with_ghost: also items whose tags only look complete because some of them stand for pieces sold
+	unread (open RFID Unread Sales); `ghost` says how many."""
 	conditions, values = "", {"statuses": IN_STOCK_TAG}
 	if warehouse:
 		conditions += " and b.warehouse = %(warehouse)s"
@@ -492,14 +533,18 @@ def untagged_items(warehouse=None, item_code=None):
 	if item_code:
 		conditions += " and b.item_code = %(item_code)s"
 		values["item_code"] = item_code
-	return frappe.db.sql(f"""
+	return frappe.db.sql("""
 		select b.item_code, i.item_name, b.warehouse, b.actual_qty,
 			(select count(*) from `tabRFID Tag` t where t.item_code = b.item_code and t.warehouse = b.warehouse
-				and t.status in %(statuses)s and ifnull(t.serial_no, '') = '') as tagged
+				and t.status in %(statuses)s and ifnull(t.serial_no, '') = '') as tagged,
+			{ghost} as ghost
 		from `tabBin` b join `tabItem` i on i.name = b.item_code
 		where i.custom_rfid_tracked = 1 and i.has_serial_no = 0 and b.actual_qty > 0 {conditions}
-		having b.actual_qty - tagged >= 1
-		order by i.item_name, b.warehouse""", values, as_dict=True)
+		having b.actual_qty - tagged + ghost >= 1
+		order by i.item_name, b.warehouse""".format(conditions=conditions, ghost="""(select ifnull(sum(greatest(
+				u.qty - ifnull(u.settled_qty, 0), 0)), 0) from `tabRFID Unread Sale` u where u.item_code = b.item_code
+				and u.warehouse = b.warehouse and u.status = 'Open')""" if with_ghost else "0"),
+		values, as_dict=True)
 
 
 # ---------------------------------------------------------------- history

@@ -41,6 +41,59 @@ def rfid_rows(doc):
 			yield row
 
 
+def _take_over_cancelled_basket(doc):
+	"""Amending a cancelled counter bill: the desk copies the original's RFID basket, which the cancel
+	closed. On submit the amendment gets a new basket with the same reads, as far as those tags and units
+	are back on their garments (the cancel put them back), so the same pieces are sold and tracked again.
+	Done on submit, not on save: a draft is validated many times, and a failed submit rolls it back."""
+	if not doc.get("amended_from") or not doc.get("custom_rfid_basket"):
+		return
+	if frappe.db.get_value("RFID Basket", doc.custom_rfid_basket, "status") != "Cancelled":
+		return
+	doc.custom_rfid_basket = _basket_for_amendment(doc, doc.custom_rfid_basket)
+
+
+def _basket_for_amendment(doc, old_name):
+	from rfid_retail.api.pos import _claim, _claim_tag
+
+	old = frappe.get_doc("RFID Basket", old_name)
+	new = frappe.get_doc({"doctype": "RFID Basket", "pos_profile": old.pos_profile, "device": old.device,
+		"cashier": frappe.session.user, "status": "Open", "customer": doc.get("customer")})
+	skipped = []
+	for r in old.reads:
+		if r.serial_no:
+			sn = rfid.serial_info(r.serial_no)
+			usable = sn and sn.custom_rfid_status == rfid.READY and not _open_elsewhere(sn.custom_rfid_basket, old_name)
+		else:
+			tag = frappe.db.get_value("RFID Tag", r.epc, ["status", "item_code", "basket"], as_dict=True)
+			usable = tag and tag.status == rfid.TAG_ASSIGNED and tag.item_code == r.item_code \
+				and not _open_elsewhere(tag.basket, old_name)
+		if not usable:
+			skipped.append(r.component or r.serial_no or r.epc)
+			continue
+		new.append("reads", {k: r.get(k) for k in ("epc", "source", "serial_no", "component", "item_code",
+			"read_at", "read_by")})
+	for u in old.get("unread") or []:
+		new.append("unread", {k: u.get(k) for k in ("item_code", "qty", "reason", "note", "approved_by",
+			"approved_at", "request")})
+	if not new.reads and not new.get("unread"):
+		return None
+	new.insert(ignore_permissions=True)
+	for r in new.reads:
+		_claim(new, r.serial_no) if r.serial_no else _claim_tag(new, r.epc)
+	msg = _("Amendment of {0}: the RFID reads of its bill ({1}) were taken over on basket {2}.").format(
+		doc.amended_from, len(new.reads), new.name)
+	if skipped:
+		msg += " " + _("Not taken over (tag reused or unit not ready, read the pieces again): {0}").format(
+			", ".join(skipped))
+	frappe.msgprint(msg, alert=True, indicator="orange" if skipped else "green")
+	return new.name
+
+
+def _open_elsewhere(basket, old_name):
+	return bool(basket and basket != old_name and frappe.db.get_value("RFID Basket", basket, "status") == "Open")
+
+
 def before_submit(doc, method=None):
 	if not is_enabled() or cint(doc.get("is_return")):
 		return
@@ -50,10 +103,14 @@ def before_submit(doc, method=None):
 				frappe.throw(_("Row {0}: {1} has no RFID identity. Only RFID-tracked items can be sold here.").format(
 					row.idx, row.item_code))
 	basket_reads, basket_tags, approved = {}, {}, {}
+	_take_over_cancelled_basket(doc)
 	if doc.get("custom_rfid_basket"):
 		basket = frappe.get_doc("RFID Basket", doc.custom_rfid_basket)
 		if basket.status == "Cancelled":
 			frappe.throw(_("RFID basket {0} is cancelled.").format(basket.name))
+		if basket.status == "Open" and cint(basket.get("held")):
+			frappe.throw(_("RFID basket {0} belongs to a held bill. Resume the bill to sell its pieces.").format(
+				basket.name))
 		if basket.status == "Billed" and basket.sales_invoice not in (None, "", doc.name):
 			frappe.throw(_("RFID basket {0} is already billed on {1}.").format(basket.name, basket.sales_invoice))
 		for read in basket.reads:
@@ -114,7 +171,8 @@ def _check_untagged_stock(doc, basket_tags, approved=None):
 		short = qty - len(basket_tags.get(item_code, []))
 		if short <= 0:
 			continue
-		free = rfid.untagged_qty(item_code, warehouse)
+		# pieces without a tag: stock not covered by tags, leaving out tags of pieces already sold unread
+		free = rfid.taggable_qty(item_code, warehouse)
 		if short > free + (approved or {}).get(item_code, 0):
 			rfid.log_exception_on_failure("Manual Override",
 				_("{0} x {1} billed by hand on {2} but only {3} piece(s) in {4} have no tag.").format(
@@ -236,13 +294,17 @@ def _record_untagged_sales(doc):
 	if untagged and doc.get("custom_rfid_basket"):
 		approvals = frappe.get_doc("RFID Basket", doc.custom_rfid_basket).get("unread") or []
 	for (item_code, warehouse), short in untagged.items():
+		item_approvals = [a for a in approvals if a.item_code == item_code]
 		# Stock is already reduced here: more tags than stock means tagged pieces went out unread.
 		extra = rfid.count_item_tags(item_code, warehouse) - cint(flt(frappe.db.get_value("Bin",
 			{"item_code": item_code, "warehouse": warehouse}, "actual_qty")))
-		# tags already waiting on earlier unread sales are not counted twice
-		pending = min(short, extra - unread.outstanding(item_code, warehouse))
-		urs = pending > 0 and unread.record(doc, item_code, warehouse, pending,
-			[a for a in approvals if a.item_code == item_code])
+		# tags already waiting on earlier unread sales are not counted twice; pieces the counter said had a
+		# damaged or missing tag left that tag behind even while untagged stock was there too
+		pending = min(short, max(extra - unread.outstanding(item_code, warehouse),
+			sum(cint(a.qty) for a in item_approvals)))
+		urs = pending > 0 and unread.record(doc, item_code, warehouse, pending, item_approvals)
+		if short - max(pending, 0) > 0:
+			unread.record_no_tag(doc, item_code, warehouse, short - max(pending, 0))
 		if urs:
 			message = _("{0} x {1} sold on {2} without reading their tags ({3}). {4} tag(s) of {1} in {5} stand for "
 				"pieces that are gone ({6}); a stock count of {1} settles them.").format(
