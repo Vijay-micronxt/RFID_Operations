@@ -330,8 +330,7 @@ def drop_unread(basket, item_code, qty=None):
 	item (all of them without qty), newest first, so a stale approval never lets the next piece through."""
 	require_station("Billing")
 	doc = _basket(basket, for_update=True)
-	if doc.status != "Open":
-		frappe.throw(_("Basket {0} is {1}.").format(doc.name, doc.status))
+	_check_live(doc)  # a held bill keeps its approvals until it is resumed
 	left = cint(qty) if qty not in (None, "") else None
 	keep = []
 	for r in reversed(doc.get("unread") or []):

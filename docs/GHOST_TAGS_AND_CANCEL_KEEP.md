@@ -169,10 +169,24 @@ Submitting the amendment sells the same tags again, so the tag history reads Sol
 **Cancel without amending:** the tags stay on their garments, the stock is back, and the open
 unread sales of the bill are cancelled. Nothing else is needed.
 
+## 5. Holding a bill at the counter (from PR #16)
+
+A bill held in POS Next keeps its RFID basket, its tags and its tag-will-not-read approvals until
+the bill is resumed or its draft is deleted.
+
+- RFID Basket has **On Hold** (`held`) and **Held At** (`held_at`). A held basket stays Open, so
+  other counters still see its tags as taken.
+- `hold_basket`, `resume_basket` and `release_held_basket` do the work. The next customer gets a
+  new basket. On resume, the empty basket opened meanwhile is cancelled.
+- A held basket refuses reads, removals, approvals and dropped approvals (`drop_unread`), and a
+  Sales Invoice on it is refused.
+- An amended counter bill does not take over a tag that a held bill holds.
+
 ## New in the system
 
 - RFID Settings: `keep_tags_on_cancel` (Check, default on)
 - RFID Unread Sale: status **No Tag**
+- RFID Basket: `held`, `held_at`
 - API:
   - `rfid_retail.api.pos.drop_unread(basket, item_code, qty=None)`
   - `rfid_retail.api.mapping.item_rfid_summary(item_code)`
@@ -186,7 +200,7 @@ unread sales of the bill are cancelled. Nothing else is needed.
 ## Deploy
 
 1. Pull RFID_Operations (this PR) and POSNext (`feat/rfid-no-tag-prompt`).
-2. Run `bench --site <site> migrate`. This adds the setting and the URS status.
+2. Run `bench --site <site> migrate`. This adds the setting, the URS status and the basket hold fields.
 3. Run `bench build --app rfid_retail` and `bench build --app pos_next`.
 4. Run `bench restart`.
 5. On Chandrlok, update or disable the two cancel-warning Client Scripts (see above).
@@ -194,7 +208,7 @@ unread sales of the bill are cancelled. Nothing else is needed.
 
 ## Tested
 
-Tested on a copy of the Chandrlok data. The automated scenario rolls back and has 44 checks,
+Tested on a copy of the Chandrlok data. The automated scenario rolls back and has 52 checks,
 all passing:
 
 - ghost counts
@@ -210,6 +224,7 @@ all passing:
 - freeing kept tags
 - setting off
 - counter bill cancelled and amended: new basket, same tags sold again
+- held bill: new basket for the next customer, held basket locked, resume, deleted draft
 
 The earlier unread-sale and stock-count scenario still passes 63 of 63. `drop_unread` was
 checked directly.
