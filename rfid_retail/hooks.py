@@ -193,6 +193,8 @@ app_license = "mit"
 # -----------------------------------------------------------
 
 # ignore_links_on_delete = ["Communication", "ToDo"]
+# Logs only: a draft whose submit was refused (and logged) can still be deleted
+ignore_links_on_delete = ["RFID Exception", "RFID Tag Event"]
 
 # Request Events
 # ----------------
