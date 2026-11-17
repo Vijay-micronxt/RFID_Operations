@@ -13,6 +13,7 @@ from frappe.rate_limiter import rate_limit
 from frappe.utils import cint, flt, now_datetime
 
 from rfid_retail import rfid, unread
+from rfid_retail.api.on_approval import config as on_approval_config
 from rfid_retail.settings import get as setting, has_station, require_station
 
 def _load(value):
@@ -55,6 +56,8 @@ def counter_config(pos_profile):
 		"hold": 1,
 		"device": frappe.db.get_value("RFID Device",
 			{"pos_profile": pos_profile, "device_type": "Tray Reader", "is_active": 1}, "name"),
+		# goods on approval: give on an Approval Note, settle later (api.on_approval)
+		**on_approval_config(),
 	}
 
 
