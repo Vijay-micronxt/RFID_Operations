@@ -37,8 +37,21 @@ def get_row_serials(row):
 
 def rfid_rows(doc):
 	for row in doc.get("items") or []:
+		if billed_from_delivery(doc, row):
+			continue
 		if rfid.is_rfid_item(row.item_code):
 			yield row
+
+
+def billed_from_delivery(doc, row):
+	"""A bill row of goods already delivered (e.g. the kept pieces of an Approval Note): its tags were
+	handled by the Delivery Note, which moved the stock."""
+	return doc.doctype != "Delivery Note" and not cint(doc.get("update_stock")) and bool(row.get("delivery_note"))
+
+
+def billed_field(doc):
+	"""Field of the RFID Basket that holds the document the basket's pieces went out on."""
+	return "delivery_note" if doc.doctype == "Delivery Note" else "sales_invoice"
 
 
 def _take_over_cancelled_basket(doc):
@@ -111,8 +124,9 @@ def before_submit(doc, method=None):
 		if basket.status == "Open" and cint(basket.get("held")):
 			frappe.throw(_("RFID basket {0} belongs to a held bill. Resume the bill to sell its pieces.").format(
 				basket.name))
-		if basket.status == "Billed" and basket.sales_invoice not in (None, "", doc.name):
-			frappe.throw(_("RFID basket {0} is already billed on {1}.").format(basket.name, basket.sales_invoice))
+		billed_on = basket.get("sales_invoice") or basket.get("delivery_note")
+		if basket.status == "Billed" and billed_on not in (None, "", doc.name):
+			frappe.throw(_("RFID basket {0} is already billed on {1}.").format(basket.name, billed_on))
 		for read in basket.reads:
 			if read.serial_no:
 				basket_reads.setdefault(read.serial_no, set()).add(read.component or read.serial_no)
@@ -281,7 +295,8 @@ def on_submit(doc, method=None):
 				_sell_tag(doc, row, entry["tag"])
 	_record_untagged_sales(doc)
 	if doc.get("custom_rfid_basket"):
-		frappe.db.set_value("RFID Basket", doc.custom_rfid_basket, {"status": "Billed", "sales_invoice": doc.name, "customer": doc.customer})
+		frappe.db.set_value("RFID Basket", doc.custom_rfid_basket, {"status": "Billed", billed_field(doc): doc.name,
+			"customer": doc.customer})
 
 
 def _record_untagged_sales(doc):
@@ -337,8 +352,10 @@ def _sell_tag(doc, row, code):
 	tag = frappe.get_doc("RFID Tag", code, for_update=True)
 	if not tag.current_assignment:
 		return
-	frappe.db.set_value("RFID Tag Assignment", tag.current_assignment,
-		{"sales_invoice": doc.name, "sold_rate": row.rate, "sold_by": frappe.session.user, "sold_on": now_datetime()})
+	sold = {"sold_rate": row.rate, "sold_by": frappe.session.user, "sold_on": now_datetime()}
+	if doc.doctype != "Delivery Note":
+		sold["sales_invoice"] = doc.name
+	frappe.db.set_value("RFID Tag Assignment", tag.current_assignment, sold)
 	if free_at_once():
 		rfid.close_assignment(code, "Sold", action="Sold", reference_doctype=doc.doctype, reference_name=doc.name,
 			amount=row.rate, remarks=_("Sold and freed for reuse"))
@@ -351,11 +368,13 @@ def _sell_tag(doc, row, code):
 
 
 def _mark_sold(doc, row, serial_no):
+	# Out on a Delivery Note (on approval): sold, but the bill comes later
+	invoice = None if doc.doctype == "Delivery Note" else doc.name
 	frappe.db.set_value("Serial No", serial_no,
-		{"custom_rfid_status": rfid.SOLD, "custom_sales_invoice": doc.name, "custom_rfid_basket": None},
+		{"custom_rfid_status": rfid.SOLD, "custom_sales_invoice": invoice, "custom_rfid_basket": None},
 		update_modified=False)
 	for comp in rfid.get_components(serial_no):
-		frappe.db.set_value("Garment Component", comp.name, {"status": "Sold", "sales_invoice": doc.name})
+		frappe.db.set_value("Garment Component", comp.name, {"status": "Sold", "sales_invoice": invoice})
 	for asg in frappe.get_all("RFID Tag Assignment", {"serial_no": serial_no, "status": "Active"}, ["name", "tag"]):
 		_sell_tag(doc, row, asg.tag)
 
@@ -413,7 +432,9 @@ def on_cancel(doc, method=None):
 	if cint(doc.get("is_return")):
 		for row in rfid_rows(doc):
 			for serial_no in get_row_serials(row) if rfid.has_serial(row.item_code) else []:
-				sold_on = frappe.db.get_value("Serial No", serial_no, "custom_sales_invoice")
+				# a cancelled approval return: the piece is out with the customer again
+				sold_on = doc.doctype == "Delivery Note" or frappe.db.get_value("Serial No", serial_no,
+					"custom_sales_invoice")
 				frappe.db.set_value("Serial No", serial_no,
 					"custom_rfid_status", rfid.SOLD if sold_on else rfid.PENDING, update_modified=False)
 		# Tags put back to work by the return go back to the sold state.
@@ -430,7 +451,10 @@ def on_cancel(doc, method=None):
 
 	for row in rfid_rows(doc):
 		for serial_no in get_row_serials(row) if rfid.has_serial(row.item_code) else []:
-			if frappe.db.get_value("Serial No", serial_no, "custom_sales_invoice") != doc.name:
+			if doc.doctype == "Delivery Note":
+				if frappe.db.get_value("Serial No", serial_no, "custom_rfid_status") != rfid.SOLD:
+					continue
+			elif frappe.db.get_value("Serial No", serial_no, "custom_sales_invoice") != doc.name:
 				continue
 			for comp in rfid.get_components(serial_no):
 				frappe.db.set_value("Garment Component", comp.name,

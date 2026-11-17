@@ -287,6 +287,12 @@ _priced_inward_events = {
 doc_events = {
 	"Sales Invoice": _rfid_invoice_events,
 	"POS Invoice": _rfid_invoice_events,
+	# only Delivery Notes given on approval at the counter (and their returns)
+	"Delivery Note": {
+		"before_submit": "rfid_retail.overrides.delivery_note.before_submit",
+		"on_submit": "rfid_retail.overrides.delivery_note.on_submit",
+		"on_cancel": "rfid_retail.overrides.delivery_note.on_cancel",
+	},
 	"Purchase Order": _purchase_pricing_events,
 	"Purchase Receipt": _priced_inward_events,
 	"Purchase Invoice": _priced_inward_events,

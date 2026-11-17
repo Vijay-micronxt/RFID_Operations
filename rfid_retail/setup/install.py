@@ -15,6 +15,14 @@ def after_migrate():
 	seed_setting_defaults()
 	grant_counter_permissions()
 	ensure_pricing_fields()
+	ensure_approval_series()
+
+
+def ensure_approval_series():
+	if frappe.db.get_single_value("RFID Settings", "goods_on_approval"):
+		from rfid_retail.api.on_approval import ensure_series
+
+		ensure_series()
 
 
 def ensure_pricing_fields():
@@ -55,6 +63,8 @@ COUNTER_PERMS = {
 	"Serial and Batch Bundle": ("read", "create", "write", "submit", "cancel"),
 	"Serial No": ("read",),
 	"Sales Invoice": ("read", "create", "write", "submit"),
+	# goods on approval: the Approval Note, its return and the bill are made as the cashier
+	"Delivery Note": ("read", "create", "write", "submit", "print"),
 	"POS Profile": ("read",),
 	"Loyalty Program": ("read",),
 	# India Compliance creates one log per GST period on the first invoice of that period.
@@ -155,4 +165,19 @@ def get_custom_fields():
 		"POS Invoice": [basket],
 		"Sales Invoice Item": [manifest],
 		"POS Invoice Item": [manifest],
+		# goods on approval (api.on_approval): a Delivery Note made at the counter
+		"Delivery Note": [
+			{"fieldname": "custom_is_approval", "fieldtype": "Check", "label": "On Approval", "read_only": 1,
+				"in_list_view": 1, "in_standard_filter": 1, "insert_after": "customer_name",
+				"description": "Given on approval at the counter, not paid. Kept pieces are billed later, the rest come back."},
+			{**basket, "insert_after": "custom_is_approval", "depends_on": "custom_rfid_basket"},
+			{"fieldname": "custom_pos_profile", "fieldtype": "Link", "label": "Counter", "options": "POS Profile",
+				"read_only": 1, "no_copy": 1, "insert_after": "custom_rfid_basket", "depends_on": "custom_is_approval"},
+			{"fieldname": "custom_approved_by", "fieldtype": "Link", "label": "Approved By", "options": "User",
+				"read_only": 1, "no_copy": 1, "insert_after": "custom_pos_profile", "depends_on": "custom_is_approval"},
+			{"fieldname": "custom_approval_request", "fieldtype": "Link", "label": "Approval Request",
+				"options": "RFID Approval Request", "read_only": 1, "no_copy": 1, "insert_after": "custom_approved_by",
+				"depends_on": "custom_approval_request"},
+		],
+		"Delivery Note Item": [manifest],
 	}

@@ -17,6 +17,7 @@
   "held_at",
   "customer",
   "sales_invoice",
+  "delivery_note",
   "reads_section",
   "reads",
   "unread_section",
@@ -91,6 +92,13 @@
    "read_only": 1
   },
   {
+   "fieldname": "delivery_note",
+   "fieldtype": "Link",
+   "options": "Delivery Note",
+   "label": "Approval Note",
+   "read_only": 1
+  },
+  {
    "fieldname": "reads_section",
    "fieldtype": "Section Break",
    "label": "Unique Reads"
@@ -116,7 +124,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-31 12:00:00.000000",
+ "modified": "2026-11-17 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Basket",

@@ -37,8 +37,12 @@ def _hash(request, pin):
 	return hmac.new(key, f"{request}:{pin}".encode(), hashlib.sha256).hexdigest()
 
 
-def create_request(basket, item_code, qty, reason, note, warehouse):
-	"""New pending request with a PIN per approver; notifies them. Returns the request doc."""
+GOODS = "Goods on Approval"
+
+
+def create_request(basket, item_code, qty, reason, note, warehouse, **extra):
+	"""New pending request with a PIN per approver; notifies them. Returns the request doc.
+	extra: request_type / customer / amount for goods given on approval."""
 	people = approvers(exclude=frappe.session.user)
 	if not people:
 		frappe.throw(_("Nobody can approve this yet. Give a manager the RFID Approver role (RFID Settings > {0} station).").format(
@@ -55,6 +59,7 @@ def create_request(basket, item_code, qty, reason, note, warehouse):
 		"warehouse": warehouse,
 		"basket": basket.name,
 		"expires_at": add_to_date(now_datetime(), minutes=max(cint(setting("approval_pin_minutes")) or 10, 1)),
+		**extra,
 	})
 	req.insert(ignore_permissions=True)
 	pins = {}
@@ -71,6 +76,12 @@ def create_request(basket, item_code, qty, reason, note, warehouse):
 
 
 def _message(req, pin):
+	if req.get("request_type") == GOODS:
+		return _("{0} at {1} asks to give {2} piece(s) worth {3} on approval to {4} (no payment now).{5} PIN: {6} (valid till {7}).").format(
+			frappe.utils.get_fullname(req.requested_by), req.pos_profile, req.qty,
+			frappe.utils.fmt_money(req.amount, currency=frappe.db.get_default("currency")),
+			frappe.db.get_value("Customer", req.customer, "customer_name") or req.customer,
+			f" {_('Note')}: {req.note}." if req.note else "", pin, get_datetime(req.expires_at).strftime("%H:%M"))
 	return _("{0} at {1} asks to sell {2} x {3} without reading its RFID tag ({4}).{5} PIN: {6} (valid till {7}).").format(
 		frappe.utils.get_fullname(req.requested_by), req.pos_profile, req.qty, req.item_name or req.item_code, req.reason,
 		f" {_('Note')}: {req.note}." if req.note else "", pin, get_datetime(req.expires_at).strftime("%H:%M"))
@@ -142,13 +153,15 @@ def _load(request, for_update=True):
 
 
 def _grant(req, approver, via):
-	"""Approved: the pieces are allowed on the bill's basket."""
+	"""Approved: the pieces are allowed on the bill's basket (goods on approval: the counter may now
+	give them; the request is used up when the Approval Note is made)."""
 	from rfid_retail.api.pos import add_unread_approval
 
 	if frappe.db.get_value("RFID Basket", req.basket, "status") != "Open":
 		req.db_set("status", "Expired")
 		frappe.throw(_("The bill of request {0} is no longer open.").format(req.name))
-	add_unread_approval(req.basket, req.item_code, req.qty, req.reason, req.note, approver, request=req.name)
+	if req.get("request_type") != GOODS:
+		add_unread_approval(req.basket, req.item_code, req.qty, req.reason, req.note, approver, request=req.name)
 	req.db_set({"status": "Approved", "approved_by": approver, "approved_via": via, "decided_at": now_datetime()})
 
 
@@ -208,7 +221,7 @@ def status(request):
 	req = _load(request, for_update=False)
 	return {"request": req.name, "status": req.status, "approved_by": req.approved_by,
 		"approved_by_name": req.approved_by and frappe.utils.get_fullname(req.approved_by),
-		"expires_at": req.expires_at}
+		"expires_at": req.expires_at, "request_type": req.get("request_type")}
 
 
 def is_approver(user=None):

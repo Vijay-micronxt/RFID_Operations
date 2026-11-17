@@ -47,4 +47,8 @@ class RFIDSettings(Document):
 			from rfid_retail.pricing import ensure_fields
 
 			ensure_fields(self)  # the cached settings still hold the switches as they were before this save
+		if self.goods_on_approval:
+			from rfid_retail.api.on_approval import ensure_series
+
+			ensure_series(self.approval_note_series)  # the cached settings are not updated yet
 		frappe.clear_cache()  # boot info carries the item code / label / pricing switches

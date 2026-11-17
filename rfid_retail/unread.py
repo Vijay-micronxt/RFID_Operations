@@ -43,9 +43,10 @@ def approval_mode(user=None):
 		setting("unread_approval_mode") or "", "pin")
 
 
-def check_approver(manager=None, password=None):
-	"""The user who approves an unread-tag sale: the cashier when allowed, else an approver who signs in here."""
-	mode = approval_mode()
+def check_approver(manager=None, password=None, mode=None):
+	"""The user who approves an unread-tag sale (or goods on approval, which passes its own mode):
+	the cashier when allowed, else an approver who signs in here."""
+	mode = mode or approval_mode()
 	if mode == "self":
 		return frappe.session.user
 	if mode == "pin":

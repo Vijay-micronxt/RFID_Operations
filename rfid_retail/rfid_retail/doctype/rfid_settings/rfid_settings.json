@@ -28,6 +28,12 @@
   "whatsapp_sender_id",
   "whatsapp_auth_token",
   "whatsapp_test_mobile",
+  "goods_approval_section",
+  "goods_on_approval",
+  "goods_approval_needs_approver",
+  "cb_goods_approval",
+  "approval_note_series",
+  "approval_print_format",
   "device_section",
   "device_offline_minutes",
   "exit_gate_enabled",
@@ -226,6 +232,46 @@
    "label": "Test mobile",
    "depends_on": "approval_whatsapp",
    "description": "When set, every PIN goes to this number instead of the approvers' numbers. Clear it to go live."
+  },
+  {
+   "fieldname": "goods_approval_section",
+   "fieldtype": "Section Break",
+   "label": "Goods on Approval",
+   "description": "A customer takes clothes home without paying, keeps some and brings the rest back. The counter gives them on an Approval Note (a Delivery Note marked On Approval): the tags come off as in a sale. Later the kept pieces are billed (any amount, the rest given as discount) and the rest come back into stock without a tag, ready to be tagged again. Only the bill shows in the sales reports."
+  },
+  {
+   "fieldname": "goods_on_approval",
+   "fieldtype": "Check",
+   "label": "Give goods on approval at the counter",
+   "default": "0"
+  },
+  {
+   "fieldname": "goods_approval_needs_approver",
+   "fieldtype": "Check",
+   "label": "Giving on approval needs an approver",
+   "default": "1",
+   "depends_on": "goods_on_approval",
+   "description": "A cashier who does not hold the Unread Sale Approval station (RFID Approver role by default) needs an approver, by PIN or login (How the approver approves, above)."
+  },
+  {
+   "fieldname": "cb_goods_approval",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "approval_note_series",
+   "fieldtype": "Data",
+   "label": "Approval Note series",
+   "default": "APN-.YYYY.-",
+   "depends_on": "goods_on_approval",
+   "description": "Naming series of the Delivery Notes given on approval."
+  },
+  {
+   "fieldname": "approval_print_format",
+   "fieldtype": "Link",
+   "options": "Print Format",
+   "label": "Approval Note print format",
+   "default": "Approval Note",
+   "depends_on": "goods_on_approval"
   },
   {
    "fieldname": "device_section",
@@ -554,7 +600,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-11-02 18:00:00.000000",
+ "modified": "2026-11-17 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "RFID Retail",
  "name": "RFID Settings",
