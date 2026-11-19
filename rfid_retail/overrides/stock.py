@@ -68,7 +68,11 @@ def unit_qty(row):
 
 
 def validate(doc, method=None):
-	if not is_enabled() or doc.doctype not in TAGGED_DOCTYPES or doc.docstatus != 0:
+	if not is_enabled() or doc.doctype not in TAGGED_DOCTYPES:
+		return
+	if doc.get("_action") == "submit":
+		check_untagged_return(doc)
+	if doc.docstatus != 0:
 		return
 	keep = set()
 	used = {}
@@ -119,6 +123,34 @@ def validate(doc, method=None):
 		frappe.msgprint(_("{0} RFID tag(s) of {1} were left out because rows now have fewer pieces. They stay kept on "
 			"{1}: free them there or read them on another row.").format(len(trimmed), doc.amended_from),
 			alert=True, indicator="orange")
+
+
+def check_untagged_return(doc):
+	"""Return to supplier: pieces sent back without their tag read must be pieces that have no tag.
+	Otherwise stock goes down while their tags stay counted in the warehouse."""
+	if not cint(doc.get("is_return")) or doc.doctype not in ("Purchase Receipt", "Purchase Invoice"):
+		return
+	need = {}
+	for row in doc.get("items") or []:
+		if not row.item_code or not rfid.is_rfid_item(row.item_code) or rfid.has_serial(row.item_code) \
+				or rfid.get_set_definition(row.item_code):
+			continue
+		if direction(doc, row) != OUT and not _goes_back_on_receipt(doc, row):
+			continue
+		extra = unit_qty(row) - len(row_tags(row))
+		if extra > 0:
+			wh = source_warehouse(row) or (row.get("pr_detail")
+				and frappe.db.get_value("Purchase Receipt Item", row.pr_detail, "warehouse"))
+			key = (row.item_code, wh)
+			need.setdefault(key, [0, []])
+			need[key][0] += extra
+			need[key][1].append(str(row.idx))
+	for (item_code, wh), (extra, rows) in need.items():
+		have = rfid.untagged_qty(item_code, wh)
+		if extra > have:
+			frappe.throw(_("Row {0}: {1} piece(s) of {2} go back without their tag read, but {3} has only {4} piece(s) "
+				"of it without a tag. Read their tags with Scan Return Tags.").format(
+				", ".join(rows), extra, item_code, wh, have), title=_("Tags not read"))
 
 
 def _goes_back_on_receipt(doc, row):
