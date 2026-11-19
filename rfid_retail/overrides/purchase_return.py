@@ -62,8 +62,10 @@ def plan_return_tags(doctype, items, codes, return_against=None, set_warehouse=N
 	"""Which rows of a draft return the tags read belong to.
 
 	Returns one verdict per tag; when all are usable, `keep` (row -> tags), `remove` (rows nobody read a
-	tag for), `add` (items read that have no row: only a return not made from a bill) and, for a
-	Debit Note, whether it must move stock itself (`update_stock`)."""
+	tag for), `restore` (rows of the bill taken off by an earlier read, needed again), `add` (items read
+	that have no row: only a return not made from a bill) and, for a Debit Note, whether it must move
+	stock itself (`update_stock`). Read again: the tags already on the rows come along, rows without
+	tags (pieces without a tag, typed by hand) stay."""
 	from rfid_retail.api.pos import _load
 
 	require_enabled()
@@ -75,11 +77,31 @@ def plan_return_tags(doctype, items, codes, return_against=None, set_warehouse=N
 	if not codes:
 		frappe.throw(_("Read the tags of the pieces going back first."))
 
+	# Read again after rows were taken off: rows of the bill that are no longer on the form can come back.
+	link = "purchase_invoice_item" if doctype == "Purchase Invoice" else "purchase_receipt_item"
+	bill = {}
+	if return_against:
+		from erpnext.controllers.sales_and_purchase_return import make_return_doc
+
+		bill = {b.get(link): b for b in make_return_doc(doctype, return_against).items if b.get(link)}
+	on_form = {r.get(link) for r in items if r.get(link)}
+	for key, b in bill.items():
+		if key not in on_form:
+			items.append(frappe._dict(name="bill:" + key, idx=None, item_code=b.item_code, warehouse=b.warehouse,
+				qty=b.qty, conversion_factor=b.conversion_factor, pr_detail=b.get("pr_detail"),
+				purchase_receipt=b.get("purchase_receipt"), **{link: key}))
+	# a second read: rows without tags were left on by hand (pieces without a tag) and stay
+	rescan = any(cint(r.get("tags")) for r in items)
+
 	room = {}
 	for r in items:
 		linked = any(r.get(f) for f in SOURCE_ROW_FIELDS)
 		# rows from the bill: no more than the bill still has to give back; own rows: no limit
-		room[r.name] = int(round(_units(r))) if linked and return_against else None
+		if linked and return_against:
+			b = bill.get(r.get(link))
+			room[r.name] = int(round(_units(b))) if b else 0
+		else:
+			room[r.name] = None
 		if doctype == "Purchase Invoice" and r.get("pr_detail"):
 			# the stock came on a Purchase Receipt: no more than that receipt still holds
 			left = _receipt_units_left(r.pr_detail)
@@ -144,7 +166,13 @@ def plan_return_tags(doctype, items, codes, return_against=None, set_warehouse=N
 	if not out["ok"]:
 		return out
 	kept = [r for r in items if r.name in keep]
-	out.update(keep=keep, remove=[r.name for r in items if r.name not in keep], add=list(add.values()))
+	restore = []
+	for r in kept:
+		if r.name.startswith("bill:"):
+			row = bill[r.get(link)].as_dict(no_default_fields=True)
+			restore.append({"row": r.name, "fields": {k: v for k, v in row.items() if k not in ("idx", "parentfield")}})
+	out.update(keep=keep, restore=restore, add=list(add.values()), remove=[r.name for r in items
+		if r.name not in keep and not r.name.startswith("bill:") and (not rescan or cint(r.get("tags")))])
 	if doctype == "Purchase Invoice":
 		receipts = sorted({r.purchase_receipt for r in kept if r.get("purchase_receipt")})
 		out["receipts"] = receipts

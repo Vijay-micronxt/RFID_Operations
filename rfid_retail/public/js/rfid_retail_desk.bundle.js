@@ -757,7 +757,9 @@ rfid_retail.review_tags_dialog = async function (frm, after) {
 
 rfid_retail.return_tags_dialog = function (frm) {
 	const esc = frappe.utils.escape_html;
-	const S = { codes: [], plan: null, timer: null, busy: false, seq: 0 };
+	const rowTags = (r) => [...new Set((r.custom_rfid_tags || "").split(/[\s,]+/).filter(Boolean))];
+	// read again: the tags already on the rows come along, so more pieces can be added
+	const S = { codes: [...new Set((frm.doc.items || []).flatMap(rowTags))], plan: null, timer: null, busy: false, seq: 0 };
 	const d = new frappe.ui.Dialog({
 		title: __("Scan Return Tags"),
 		size: "large",
@@ -795,6 +797,7 @@ rfid_retail.return_tags_dialog = function (frm) {
 			purchase_receipt_item: r.purchase_receipt_item,
 			pr_detail: r.pr_detail,
 			purchase_receipt: r.purchase_receipt,
+			tags: rowTags(r).length,
 		}));
 
 	function render() {
@@ -889,8 +892,12 @@ rfid_retail.return_tags_dialog = function (frm) {
 			frm.doc.items = (frm.doc.items || []).filter((r) => !gone.has(r.name));
 			const setUnits = (row, tags) => {
 				const cf = flt(row.conversion_factor) || 1;
-				row.qty = -tags.length / cf;
-				row.stock_qty = -tags.length;
+				// pieces without a tag added to the qty by hand after an earlier read stay on
+				const had = rowTags(row).length;
+				const extra = had ? Math.max(Math.round(Math.abs(flt(row.qty)) * cf) - had, 0) : 0;
+				const units = tags.length + extra;
+				row.qty = -units / cf;
+				row.stock_qty = -units;
 				if ("received_qty" in row || frm.doctype === "Purchase Receipt") row.received_qty = row.qty;
 				if ("received_stock_qty" in row) row.received_stock_qty = row.stock_qty;
 				row.rejected_qty = 0;
@@ -898,6 +905,12 @@ rfid_retail.return_tags_dialog = function (frm) {
 				row.custom_rfid_tag_count = tags.length;
 			};
 			frm.doc.items.forEach((row) => p.keep[row.name] && setUnits(row, p.keep[row.name]));
+			const skip = new Set(["doctype", "name", "idx", "parent", "parentfield", "parenttype", "__islocal"]);
+			(p.restore || []).forEach((x) => {
+				const row = frm.add_child("items");
+				Object.keys(x.fields).forEach((k) => !skip.has(k) && (row[k] = x.fields[k]));
+				setUnits(row, p.keep[x.row]);
+			});
 			if (frm.doctype === "Purchase Invoice" && p.update_stock !== undefined && cint(frm.doc.update_stock) !== p.update_stock)
 				await frm.set_value("update_stock", p.update_stock);
 			if (p.add && p.add.length) {
@@ -905,7 +918,6 @@ rfid_retail.return_tags_dialog = function (frm) {
 					doc: frm.doc,
 					rows: p.add.map((a) => ({ item_code: a.item_code, qty: -a.tags.length, rate: a.rate })),
 				});
-				const skip = new Set(["doctype", "name", "idx", "parent", "parentfield", "parenttype", "__islocal"]);
 				details.forEach((det, i) => {
 					const row = frm.add_child("items");
 					Object.keys(det).forEach((k) => !skip.has(k) && (row[k] = det[k]));
