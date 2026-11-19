@@ -295,7 +295,12 @@ doc_events = {
 	},
 	"Purchase Order": _purchase_pricing_events,
 	"Purchase Receipt": _priced_inward_events,
-	"Purchase Invoice": _priced_inward_events,
+	"Purchase Invoice": {
+		**_priced_inward_events,
+		# Debit Note billed from a Purchase Receipt: tags read on it go back on that receipt's return
+		"before_submit": "rfid_retail.overrides.purchase_return.before_submit",
+		"on_cancel": [*_priced_inward_events["on_cancel"], "rfid_retail.overrides.purchase_return.on_cancel"],
+	},
 	"Stock Entry": _tagged_stock_events,
 	"Item Price": {"validate": "rfid_retail.overrides.item_price.validate"},
 	"Item Attribute": {"on_update": "rfid_retail.overrides.item_attribute.on_update"},
