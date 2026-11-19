@@ -87,6 +87,8 @@ def validate(doc, method=None):
 		if not rfid.is_rfid_item(row.item_code):
 			frappe.throw(_("Row {0}: {1} is not an RFID item. Remove its tags.").format(row.idx, row.item_code))
 		way = direction(doc, row)
+		if not way and _goes_back_on_receipt(doc, row):
+			way = OUT  # its stock goes back on the Purchase Receipt (purchase_return.before_submit)
 		if not way:
 			frappe.throw(_("Tick Update Stock to tag the items on this invoice."))
 		if rfid.get_set_definition(row.item_code):
@@ -119,9 +121,16 @@ def validate(doc, method=None):
 			alert=True, indicator="orange")
 
 
+def _goes_back_on_receipt(doc, row):
+	"""Debit Note row billed from a Purchase Receipt: the receipt's return moves the stock and tags."""
+	return (doc.doctype == "Purchase Invoice" and cint(doc.get("is_return")) and not cint(doc.get("update_stock"))
+		and bool(row.get("purchase_receipt") and row.get("pr_detail")))
+
+
 def _check_outgoing(row, code):
 	res = rfid.resolve_code(code)
-	wh = source_warehouse(row)
+	wh = source_warehouse(row) or (row.get("pr_detail")
+		and frappe.db.get_value("Purchase Receipt Item", row.pr_detail, "warehouse"))
 	if res.kind != "tag" or res.serial_no:
 		frappe.throw(_("Row {0}: tag {1} is not on a unit of {2}.").format(row.idx, code, row.item_code))
 	if res.item_code != row.item_code:

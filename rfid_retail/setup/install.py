@@ -121,6 +121,12 @@ def get_custom_fields():
 			"allow_on_submit": 1, "no_copy": 1, "insert_after": "custom_rfid_tags"},
 	]
 	return {
+		"Purchase Receipt": [
+			{"fieldname": "custom_rfid_debit_note", "fieldtype": "Link", "label": "Made for Debit Note",
+				"options": "Purchase Invoice", "read_only": 1, "no_copy": 1, "insert_after": "return_against",
+				"depends_on": "custom_rfid_debit_note",
+				"description": "Stock and RFID tags going back for this Debit Note. Cancel the Debit Note to cancel this."},
+		],
 		"Purchase Receipt Item": row_tags,
 		"Purchase Invoice Item": row_tags,
 		"Stock Entry Detail": row_tags,

@@ -742,3 +742,218 @@ rfid_retail.review_tags_dialog = async function (frm, after) {
 	render();
 	setTimeout(() => input.focus(), 300);
 };
+
+// ------------------------------------------------------------ return to supplier by tag scan
+// A return made from a bill brings every row of it. Read the tags of the pieces going back: only
+// those items stay, one unit per tag, and the tags ride on the rows so submit frees them.
+["Purchase Invoice", "Purchase Receipt"].forEach((doctype) => {
+	frappe.ui.form.on(doctype, {
+		refresh(frm) {
+			if (!(frappe.boot.rfid_retail || {}).enabled || frm.doc.docstatus !== 0 || !frm.doc.is_return) return;
+			frm.add_custom_button(__("Scan Return Tags"), () => rfid_retail.return_tags_dialog(frm));
+		},
+	});
+});
+
+rfid_retail.return_tags_dialog = function (frm) {
+	const esc = frappe.utils.escape_html;
+	const S = { codes: [], plan: null, timer: null, busy: false, seq: 0 };
+	const d = new frappe.ui.Dialog({
+		title: __("Scan Return Tags"),
+		size: "large",
+		fields: [
+			{
+				fieldname: "read",
+				fieldtype: "Data",
+				label: __("Tags of the pieces going back"),
+				description: __(
+					"Put every piece that goes back to the supplier on the reader. Only these items stay on the return, one piece per tag; the other rows are taken off. Pieces without a tag: raise the qty on their row by hand afterwards."
+				),
+			},
+			{ fieldname: "summary", fieldtype: "HTML" },
+			{ fieldname: "list", fieldtype: "HTML" },
+		],
+		primary_action_label: __("Keep only these on the return"),
+		primary_action: () => apply(),
+		secondary_action_label: __("Clear reads"),
+		secondary_action: () => {
+			S.codes = [];
+			S.plan = null;
+			render();
+		},
+	});
+
+	const rowsArg = () =>
+		(frm.doc.items || []).map((r) => ({
+			name: r.name,
+			idx: r.idx,
+			item_code: r.item_code,
+			warehouse: r.warehouse,
+			qty: r.qty,
+			conversion_factor: r.conversion_factor,
+			purchase_invoice_item: r.purchase_invoice_item,
+			purchase_receipt_item: r.purchase_receipt_item,
+			pr_detail: r.pr_detail,
+			purchase_receipt: r.purchase_receipt,
+		}));
+
+	function render() {
+		const n = S.codes.length;
+		const p = S.plan;
+		const verdict = {};
+		((p && p.codes) || []).forEach((v) => (verdict[v.code] = v));
+		const bad = n && p ? p.codes.filter((v) => !v.ok).length : 0;
+		let msg = __("Read the tags of the pieces going back.");
+		let color = "gray";
+		if (n && (!p || S.busy)) msg = __("Checking tags...");
+		else if (bad) {
+			msg = __("{0} tag(s) cannot go back on this return (red below). Take them off the reader.", [bad]);
+			color = "red";
+		} else if (n && p) {
+			const items = new Set(p.codes.map((v) => v.item_code)).size;
+			msg = __("{0} piece(s) of {1} item(s) go back. {2} other row(s) will be taken off.", [n, items, p.remove.length]);
+			if (p.add && p.add.length) msg += " " + __("{0} new row(s) will be added.", [p.add.length]);
+			if (p.receipts && p.receipts.length)
+				msg += " " + __("Stock and tags go back on Purchase Receipt {0} when you submit (a Purchase Return is made for it).", [p.receipts.join(", ")]);
+			color = "green";
+		}
+		d.fields_dict.summary.$wrapper.html(`
+			<div style="display:flex;align-items:baseline;gap:12px;margin:4px 0">
+				<span style="font-size:32px;font-weight:700;color:var(--${color}-600)">${n}</span>
+				<span class="text-muted">${esc(__("piece(s) read"))}</span>
+			</div>
+			<div class="alert" style="margin:6px 0 4px;padding:8px 12px;border-radius:8px;background:var(--${color}-50);color:var(--${color}-700)">${esc(msg)}</div>`);
+		d.fields_dict.list.$wrapper.html(
+			n
+				? `<div style="max-height:320px;overflow:auto;border:1px solid var(--border-color);border-radius:8px">${S.codes
+						.slice()
+						.reverse()
+						.map((c) => {
+							const v = verdict[c];
+							const ok = !v || v.ok;
+							return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border-color)">
+								<span class="indicator-pill ${v ? (ok ? "green" : "red") : "gray"}">${esc(c)}</span>
+								<span class="small ${ok ? "text-muted" : "text-danger"}" style="flex:1">${esc(v ? v.message : __("Checking..."))}</span>
+								<a class="small" data-drop="${esc(c)}">${__("Remove")}</a></div>`;
+						})
+						.join("")}</div>`
+				: ""
+		);
+		d.get_primary_btn().prop("disabled", !(n && p && p.ok && !S.busy));
+	}
+
+	async function plan() {
+		const seq = ++S.seq;
+		if (!S.codes.length) {
+			S.plan = null;
+			return render();
+		}
+		S.busy = true;
+		render();
+		try {
+			const p = await frappe.xcall("rfid_retail.overrides.purchase_return.plan_return_tags", {
+				doctype: frm.doctype,
+				items: rowsArg(),
+				codes: S.codes,
+				return_against: frm.doc.return_against,
+				set_warehouse: frm.doc.set_warehouse,
+			});
+			if (seq === S.seq) S.plan = p;
+		} finally {
+			if (seq === S.seq) {
+				S.busy = false;
+				render();
+			}
+		}
+	}
+
+	function add(text) {
+		const fresh = [...new Set(text.split(/[\s,]+/).map((x) => x.trim().toUpperCase()))].filter((x) => x && !S.codes.includes(x));
+		if (!fresh.length) return;
+		S.codes.push(...fresh);
+		S.plan = null;
+		render();
+		clearTimeout(S.timer);
+		S.timer = setTimeout(plan, 400);
+	}
+
+	async function apply() {
+		const p = S.plan;
+		if (!p || !p.ok || S.busy) return;
+		S.busy = true;
+		render();
+		try {
+			const child = frappe.meta.get_docfield(frm.doctype, "items").options;
+			const gone = new Set(p.remove);
+			gone.forEach((cdn) => locals[child] && delete locals[child][cdn]);
+			frm.doc.items = (frm.doc.items || []).filter((r) => !gone.has(r.name));
+			const setUnits = (row, tags) => {
+				const cf = flt(row.conversion_factor) || 1;
+				row.qty = -tags.length / cf;
+				row.stock_qty = -tags.length;
+				if ("received_qty" in row || frm.doctype === "Purchase Receipt") row.received_qty = row.qty;
+				if ("received_stock_qty" in row) row.received_stock_qty = row.stock_qty;
+				row.rejected_qty = 0;
+				row.custom_rfid_tags = tags.join("\n");
+				row.custom_rfid_tag_count = tags.length;
+			};
+			frm.doc.items.forEach((row) => p.keep[row.name] && setUnits(row, p.keep[row.name]));
+			if (frm.doctype === "Purchase Invoice" && p.update_stock !== undefined && cint(frm.doc.update_stock) !== p.update_stock)
+				await frm.set_value("update_stock", p.update_stock);
+			if (p.add && p.add.length) {
+				const details = await frappe.xcall("rfid_retail.api.pricing.item_rows", {
+					doc: frm.doc,
+					rows: p.add.map((a) => ({ item_code: a.item_code, qty: -a.tags.length, rate: a.rate })),
+				});
+				const skip = new Set(["doctype", "name", "idx", "parent", "parentfield", "parenttype", "__islocal"]);
+				details.forEach((det, i) => {
+					const row = frm.add_child("items");
+					Object.keys(det).forEach((k) => !skip.has(k) && (row[k] = det[k]));
+					row.warehouse = p.add[i].warehouse;
+					row.conversion_factor = flt(row.conversion_factor) || 1;
+					setUnits(row, p.add[i].tags);
+				});
+			}
+			frm.doc.items.forEach((r, i) => (r.idx = i + 1));
+			frm.cscript.calculate_taxes_and_totals();
+			frm.refresh_field("items");
+			frm.dirty();
+			d.hide();
+			frappe.show_alert(
+				{ message: __("{0} piece(s) on the return. Check the qty of pieces without a tag, then save.", [S.codes.length]), indicator: "green" },
+				8
+			);
+		} finally {
+			S.busy = false;
+		}
+	}
+
+	const input = d.fields_dict.read.$input;
+	input.on("keydown", (e) => {
+		if (e.key !== "Enter") return;
+		e.preventDefault();
+		const text = input.val();
+		input.val("");
+		add(text);
+	});
+	input.on("paste", () =>
+		setTimeout(() => {
+			const text = input.val();
+			if (text.split(/[\s,]+/).filter(Boolean).length > 1) {
+				input.val("");
+				add(text);
+			}
+		})
+	);
+	d.$wrapper.on("click", "[data-drop]", (e) => {
+		const c = $(e.currentTarget).attr("data-drop");
+		S.codes = S.codes.filter((x) => x !== c);
+		S.plan = null;
+		render();
+		clearTimeout(S.timer);
+		S.timer = setTimeout(plan, 200);
+	});
+	render();
+	d.show();
+	setTimeout(() => input.focus(), 300);
+};
