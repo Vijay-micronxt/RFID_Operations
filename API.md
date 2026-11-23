@@ -57,6 +57,7 @@ after repeated failures, same IP and login-hour rules) and returns
   service account.
 - Refused (401): wrong password, `Administrator` / `Guest`, non-system users, an expired password, and users with
   two-factor login (the app has no screen for the code, and skipping it would bypass the second factor).
+- Only users with the Stock Audit station (RFID Stock Operator / Store Manager) can log in; others get 401 and no key.
 - Each login and logout is recorded in the Activity Log ("Logged in / out from the RFID app"); failures are logged by Frappe.
 - Limited to 30 calls a minute per IP.
 

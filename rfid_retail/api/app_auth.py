@@ -21,7 +21,7 @@ from frappe.rate_limiter import rate_limit
 from frappe.twofactor import should_run_2fa
 from frappe.utils.password import set_encrypted_password
 
-from rfid_retail.settings import allowed_stations, is_enabled
+from rfid_retail.settings import allowed_stations, require_enabled
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
@@ -46,6 +46,11 @@ def login(usr, pwd):
 		frappe.throw(_("Two-factor login is not supported in the app."), frappe.AuthenticationError)
 	validate_ip_address(user)
 	manager.validate_hour()
+	# Only people who may count stock get a key; the data calls check the same station again.
+	require_enabled()
+	if "Stock Audit" not in allowed_stations(user):
+		frappe.throw(_("This account has no Stock Audit access. Ask for the RFID Stock Operator role."),
+			frappe.AuthenticationError)
 
 	api_key, api_secret = _rotate_keys(user)
 	add_authentication_log(_("Logged in from the RFID app"), user)
@@ -54,7 +59,7 @@ def login(usr, pwd):
 		"full_name": frappe.db.get_value("User", user, "full_name"),
 		"api_key": api_key,
 		"api_secret": api_secret,
-		"stations": allowed_stations(user) if is_enabled() else [],
+		"stations": allowed_stations(user),
 	}
 
 
