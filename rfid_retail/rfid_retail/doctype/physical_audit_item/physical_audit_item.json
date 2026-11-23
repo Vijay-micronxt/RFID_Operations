@@ -1,0 +1,73 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-23 12:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-11-23 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RFID Retail",
+ "name": "Physical Audit Item",
+ "owner": "Administrator",
+ "states": [],
+ "editable_grid": 1,
+ "istable": 1,
+ "field_order": [
+  "item_code",
+  "item_name",
+  "system_qty",
+  "scanned_qty",
+  "difference",
+  "erp_stock_qty"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "item_code.item_name",
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "system_qty",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "System Qty",
+   "description": "Units the RFID tags say are in the warehouse."
+  },
+  {
+   "fieldname": "scanned_qty",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Scanned Qty"
+  },
+  {
+   "fieldname": "difference",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Difference",
+   "read_only": 1,
+   "description": "System Qty minus Scanned Qty. Positive: not found."
+  },
+  {
+   "fieldname": "erp_stock_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "ERP Stock Qty",
+   "read_only": 1,
+   "description": "ERPNext's own stock quantity when the count was downloaded, for reference."
+  }
+ ],
+ "permissions": []
+}

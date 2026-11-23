@@ -1,0 +1,254 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-23 12:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-11-24 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RFID Retail",
+ "name": "Physical Audit",
+ "owner": "Administrator",
+ "states": [],
+ "autoname": "PA-.YYYY.-.#####",
+ "naming_rule": "Expression (old style)",
+ "editable_grid": 1,
+ "is_submittable": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1,
+ "title_field": "warehouse",
+ "field_order": [
+  "audit_date",
+  "warehouse",
+  "company",
+  "cb1",
+  "operator",
+  "downloaded_at",
+  "sent_at",
+  "client_id",
+  "device_info",
+  "summary_section",
+  "expected_units",
+  "scanned_units",
+  "difference_units",
+  "cb2",
+  "missing_tags",
+  "unknown_tags",
+  "stock_reconciliation",
+  "notes",
+  "items_section",
+  "items",
+  "tags_section",
+  "tags",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "default": "Today",
+   "fieldname": "audit_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Audit Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Warehouse",
+   "options": "Warehouse",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fetch_from": "warehouse.company",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "operator",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Counted By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "downloaded_at",
+   "fieldtype": "Datetime",
+   "label": "Downloaded At",
+   "read_only": 1,
+   "description": "When the phone downloaded what the warehouse should hold (server time). The count compares against that."
+  },
+  {
+   "fieldname": "sent_at",
+   "fieldtype": "Datetime",
+   "label": "Sent At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "client_id",
+   "fieldtype": "Data",
+   "label": "Push ID",
+   "no_copy": 1,
+   "read_only": 1,
+   "unique": 1,
+   "description": "Set by the app so sending the same count twice by mistake makes one record."
+  },
+  {
+   "fieldname": "device_info",
+   "fieldtype": "Data",
+   "label": "Device",
+   "read_only": 1
+  },
+  {
+   "fieldname": "summary_section",
+   "fieldtype": "Section Break",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "expected_units",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "System Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "scanned_units",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Scanned Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "difference_units",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Difference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "missing_tags",
+   "fieldtype": "Int",
+   "label": "Tags Not Found",
+   "read_only": 1
+  },
+  {
+   "fieldname": "unknown_tags",
+   "fieldtype": "Int",
+   "label": "Tags Not Expected Here",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "stock_reconciliation",
+   "fieldtype": "Link",
+   "label": "Stock Reconciliation",
+   "no_copy": 1,
+   "options": "Stock Reconciliation",
+   "read_only": 1,
+   "description": "The draft made from this count (Create Stock Reconciliation button, after Submit)."
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "Items"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Physical Audit Item"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "tags_section",
+   "fieldtype": "Section Break",
+   "label": "Tags"
+  },
+  {
+   "fieldname": "tags",
+   "fieldtype": "Table",
+   "label": "Tags",
+   "options": "Physical Audit Tag"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Physical Audit",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "share": 1,
+   "email": 1
+  },
+  {
+   "role": "RFID Store Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "write": 1,
+   "create": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "share": 1
+  },
+  {
+   "role": "RFID Stock Operator",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "write": 1,
+   "create": 1
+  },
+  {
+   "role": "RFID Owner",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "submit": 1
+  }
+ ]
+}
