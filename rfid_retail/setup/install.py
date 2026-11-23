@@ -167,6 +167,13 @@ def get_custom_fields():
 				"insert_after": "warehouse",
 				"description": "Bill this counter from RFID tray reads (RFID Settings must be enabled)."},
 		],
+		# the draft Stock Reconciliation made from a submitted Physical Audit points back at it
+		"Stock Reconciliation": [
+			{"fieldname": "custom_physical_audit", "fieldtype": "Link", "label": "Physical Audit",
+				"options": "Physical Audit", "read_only": 1, "no_copy": 1, "insert_after": "company",
+				"depends_on": "custom_physical_audit",
+				"description": "The count this reconciliation was made from."},
+		],
 		"Sales Invoice": [basket],
 		"POS Invoice": [basket],
 		"Sales Invoice Item": [manifest],

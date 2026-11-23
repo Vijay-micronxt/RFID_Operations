@@ -74,6 +74,19 @@ It needs the Stock Audit station and create permission on Physical Audit (RFID S
   warehouse on the same day.
 - The record keeps what the phone saw, as of `downloaded_at`; the server does not recalculate it.
 - Draft can be edited (notes); **Submit** locks it and needs the Store Manager or Owner role. Operators cannot submit or delete.
+- **Create Stock Reconciliation** (button on a *submitted* Physical Audit; method
+  `rfid_retail.rfid_retail.doctype.physical_audit.physical_audit.make_stock_reconciliation(name)`) makes a **draft**
+  Stock Reconciliation for the audit's warehouse, applying each item's **Difference** (system minus scanned) to its current ERPNext
+  stock **both ways**: a positive difference (pieces not found) lowers the stock, never below zero; a negative difference (more found
+  than the system knew) raises it. Nothing is submitted, so stock only changes when someone submits that draft. Only the pieces the
+  audit knows about (tagged ones) are touched, so untagged stock stays as it is; serial and batch items are left out. A raise needs a
+  cost per piece: the item's current rate, else its valuation / last purchase / standard rate; a row with none is still put in the
+  draft and listed in `no_rate` for someone to fill in before submitting. Pressing it again returns the draft already made; if that
+  draft is deleted or cancelled, the audit forgets it and the button returns. The difference account is the company's default
+  (Stock Adjustment). The caller needs create permission on Stock Reconciliation (Stock Manager) and read on Physical Audit, so a user
+  needs both Stock Manager and RFID Store Manager.
+- The phone cannot produce a negative difference (it only counts tags the ERP expects; a tag it does not know is listed as Unknown and
+  does not raise stock). A raise comes from an audit whose Scanned Qty was corrected on the draft before it was submitted.
 
 ## Offline count on a handheld (`catalog`)
 

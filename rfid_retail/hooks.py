@@ -194,7 +194,8 @@ app_license = "mit"
 
 # ignore_links_on_delete = ["Communication", "ToDo"]
 # Logs only: a draft whose submit was refused (and logged) can still be deleted
-ignore_links_on_delete = ["RFID Exception", "RFID Tag Event"]
+# Physical Audit: the draft Stock Reconciliation made from it can still be deleted or cancelled
+ignore_links_on_delete = ["RFID Exception", "RFID Tag Event", "Physical Audit"]
 
 # Request Events
 # ----------------
@@ -316,7 +317,12 @@ doc_events = {
 			"RFID Unread Sale",
 		)
 	},
-	"Stock Reconciliation": _inward_events,
+	"Stock Reconciliation": {
+		**_inward_events,
+		# the Physical Audit it was made from gets its Create button back
+		"on_trash": ["rfid_retail.rfid_retail.doctype.physical_audit.physical_audit.release_reconciliation"],
+		"on_cancel": ["rfid_retail.rfid_retail.doctype.physical_audit.physical_audit.release_reconciliation"],
+	},
 	# item codes and barcodes: own switches, independent of RFID
 	"Item": {
 		"before_insert": ["rfid_retail.item_codes.before_insert", "rfid_retail.labels.item_before_insert"],
