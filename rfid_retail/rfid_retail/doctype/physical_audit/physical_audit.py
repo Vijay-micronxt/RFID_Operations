@@ -57,6 +57,46 @@ def release_reconciliation(doc, method=None):
 		update_modified=False)
 
 
+def close_missing_tags(doc, method=None):
+	"""Stock Reconciliation submitted (on_submit): the pieces it took off the stock are lost, so their tags are
+	marked Lost. Without this the tags stay in stock, the next audit expects them again, finds nothing, and
+	takes the same pieces off the stock a second time.
+
+	Only as many tags per item as the stock actually went down by. A tag that is no longer in stock is skipped.
+	Cancelling the reconciliation does not bring them back: a found tag is marked Found on the tag screen."""
+	from rfid_retail import rfid
+
+	audit_name = doc.get("custom_physical_audit")
+	if not audit_name or not frappe.db.exists("Physical Audit", audit_name):
+		return
+	audit = frappe.get_doc("Physical Audit", audit_name)
+	lowered = {}
+	for row in doc.items:
+		down = cint(row.get("current_qty")) - cint(row.get("qty"))
+		if down > 0:
+			lowered[row.item_code] = lowered.get(row.item_code, 0) + down
+
+	done, failed = [], []
+	for t in audit.tags:
+		if t.result != "Missing" or lowered.get(t.item_code, 0) < 1:
+			continue
+		if frappe.db.get_value("RFID Tag", t.epc, "status") not in rfid.IN_STOCK_TAG:
+			continue
+		lowered[t.item_code] -= 1
+		try:
+			rfid.set_tag_condition(t.epc, rfid.TAG_LOST,
+				_("Not found in Physical Audit {0} (Stock Reconciliation {1})").format(audit.name, doc.name))
+			done.append(t.epc)
+		except Exception:
+			frappe.log_error(title="Physical Audit: tag not marked lost")
+			failed.append(t.epc)
+	if done or failed:
+		text = _("Stock Reconciliation {0} submitted: {1} missing tag(s) marked Lost.").format(doc.name, len(done))
+		if failed:
+			text += " " + _("Not marked (check them): {0}.").format(", ".join(failed))
+		audit.add_comment("Info", text)
+
+
 @frappe.whitelist(methods=["POST"])
 def make_stock_reconciliation(name):
 	"""Makes a DRAFT Stock Reconciliation from a submitted Physical Audit. Nothing is submitted: stock only

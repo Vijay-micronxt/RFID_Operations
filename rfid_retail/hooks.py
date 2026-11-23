@@ -318,7 +318,8 @@ doc_events = {
 		)
 	},
 	"Stock Reconciliation": {
-		**_inward_events,
+		"on_submit": [*_inward_events["on_submit"],
+			"rfid_retail.rfid_retail.doctype.physical_audit.physical_audit.close_missing_tags"],
 		# the Physical Audit it was made from gets its Create button back
 		"on_trash": ["rfid_retail.rfid_retail.doctype.physical_audit.physical_audit.release_reconciliation"],
 		"on_cancel": ["rfid_retail.rfid_retail.doctype.physical_audit.physical_audit.release_reconciliation"],

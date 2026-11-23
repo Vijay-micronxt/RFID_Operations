@@ -68,16 +68,21 @@ def _expected(warehouse):
 	for sn in serials:
 		if not rfid.is_rfid_item(sn.item_code):
 			continue
+		found = 0
 		if cint(sn.custom_is_garment_set):
 			for c in rfid.get_components(sn.name):
 				if c.rfid_tag:
 					tags.append({"epc": c.rfid_tag, "item_code": sn.item_code, "serial_no": sn.name, "component": c.name})
+					found += 1
 		else:
 			assignment = rfid.active_assignment_for(serial_no=sn.name)
 			tag = assignment and frappe.db.get_value("RFID Tag Assignment", assignment, "tag")
 			if tag:
 				tags.append({"epc": tag, "item_code": sn.item_code, "serial_no": sn.name, "component": None})
-		units[sn.item_code] = units.get(sn.item_code, 0) + 1
+				found += 1
+		# A piece whose tag was lost has none to scan, so it is not expected (else it is counted missing every time).
+		if found:
+			units[sn.item_code] = units.get(sn.item_code, 0) + 1
 
 	for t in frappe.get_all("RFID Tag",
 		filters={"warehouse": warehouse, "status": ["in", rfid.IN_STOCK_TAG], "serial_no": ("is", "not set")},
